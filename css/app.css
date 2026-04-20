@@ -2064,7 +2064,8 @@ html, body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  margin-bottom: 16px;
+  /* v4: 매출추이 탭 하단까지 3분할 확장 */
+  min-height: calc(100vh - 260px);
 }
 .stats-card-v2 {
   background: var(--color-bg-1);
@@ -2075,6 +2076,14 @@ html, body {
   flex-direction: column;
   gap: 8px;
 }
+.stats-card-actions {
+  margin-top: auto;         /* v4: 카드 하단에 고정 */
+  padding-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stats-card-actions .btn { flex: 1; min-width: 0; }
 .stats-card-v2 h4 {
   margin: 0;
   font-size: 13px;

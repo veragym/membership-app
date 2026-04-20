@@ -69,13 +69,8 @@ const StatsTab = (() => {
     // 상품 목록 (제외 필터용)
     if (allProducts.length === 0) await loadProducts();
 
+    // v4: 제외 상품 토글을 서브탭 바로 아래로, 버튼은 현재 매출 카드 하단 내부에, 3카드 그리드는 하단까지 채움
     container.innerHTML = `
-      <div class="stats-trend-grid">
-        ${renderCard('현재 매출', current, fcTarget, ptTarget, { current: true })}
-        ${renderCard(`전월 대비 (${lastMonth.m}월)`, lastM, null, null, { compareBase: current })}
-        ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
-      </div>
-
       <div class="stats-filter-panel">
         <details class="stats-filter-details">
           <summary>회원권 합계 제외 상품 (${excludedProducts.size}건 제외 중)</summary>
@@ -90,9 +85,10 @@ const StatsTab = (() => {
         </details>
       </div>
 
-      <div class="stats-action-row">
-        <button class="btn btn-secondary" id="stats-set-target">주별 목표 수정</button>
-        <button class="btn btn-primary" id="stats-kakao-copy">카카오톡으로 복사하기</button>
+      <div class="stats-trend-grid">
+        ${renderCard('현재 매출', current, fcTarget, ptTarget, { current: true, withActions: true })}
+        ${renderCard(`전월 대비 (${lastMonth.m}월)`, lastM, null, null, { compareBase: current })}
+        ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
       </div>
     `;
 
@@ -133,6 +129,13 @@ const StatsTab = (() => {
       const pct = total > 0 ? Math.round(((opts.compareBase.fc + opts.compareBase.pt) / total - 1) * 100) : 0;
       deltaBlock = `<div class="stats-delta ${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${fmt(diff)} (${pct >= 0 ? '+' : ''}${pct}%)</div>`;
     }
+    // v4: 현재 매출 카드 하단에 액션 버튼 (주별 목표 수정 / 카카오톡 복사)
+    const actionsBlock = opts.withActions ? `
+      <div class="stats-card-actions">
+        <button class="btn btn-secondary" id="stats-set-target">주별 목표 수정</button>
+        <button class="btn btn-primary" id="stats-kakao-copy">카카오톡으로 복사하기</button>
+      </div>
+    ` : '';
     return `
       <div class="stats-card-v2">
         <h4>${escHtml(title)}</h4>
@@ -141,6 +144,7 @@ const StatsTab = (() => {
         <div class="stats-row"><span>PT (계약금액)</span><b>${fmt(pt)}</b></div>
         ${deltaBlock}
         ${targetBlock}
+        ${actionsBlock}
       </div>
     `;
   }
