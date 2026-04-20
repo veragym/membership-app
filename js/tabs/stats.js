@@ -179,16 +179,20 @@ const StatsTab = (() => {
 
   // ───────── 월별 목표 입력 모달 (해당 월에 걸치는 모든 주) ─────────
   async function openMonthlyTargetModal(year, month) {
-    // 해당 월을 포함하는 주들의 월요일 목록
+    // v8 규칙: 1주는 월 1일부터(1일이 무슨 요일이든), 2주부터 월요일 시작, 월 경계 넘지 않음
     const firstDay = new Date(year, month - 1, 1);
     const lastDay  = new Date(year, month, 0);
     const weeks = [];
-    let cur = new Date(firstDay);
-    const curMon = new Date(cur);
-    const dow = curMon.getDay();
-    curMon.setDate(curMon.getDate() + (dow === 0 ? -6 : 1 - dow));  // 해당 월 1일이 속한 주 월요일
-    for (let d = new Date(curMon); d <= lastDay; d.setDate(d.getDate() + 7)) {
-      weeks.push(isoDate(d));
+    // 1주차: 월 1일
+    weeks.push(isoDate(firstDay));
+    // 1일 다음 월요일 계산
+    const dow = firstDay.getDay();  // 0=일, 1=월, ..., 6=토
+    const daysToMon = dow === 0 ? 1 : (8 - dow);
+    const nextMon = new Date(firstDay);
+    nextMon.setDate(nextMon.getDate() + daysToMon);
+    // 2주차부터 월요일 7일씩 말일까지
+    for (let d = new Date(nextMon); d <= lastDay; d.setDate(d.getDate() + 7)) {
+      weeks.push(isoDate(new Date(d)));
     }
 
     // 기존 목표 로드
