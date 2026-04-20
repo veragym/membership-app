@@ -2117,6 +2117,15 @@ html, body {
 .stats-row span, .stats-target-row span { color: var(--color-text-secondary); }
 .stats-row b, .stats-target-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .stats-target-row b.neg { color: #dc2626; }
+/* v13: 총 목표/총 남은 — 강조 */
+.stats-target-total {
+  border-top: 1px dashed var(--color-divider);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 600;
+}
+.stats-target-total span { color: var(--color-text); }
+.stats-target-total b { font-size: 14px; }
 .stats-delta {
   font-size: 13px;
   padding: 4px 0;

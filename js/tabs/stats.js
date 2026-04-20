@@ -116,11 +116,17 @@ const StatsTab = (() => {
     const fmt = n => n.toLocaleString() + '원';
     let targetBlock = '';
     if (opts.current) {
+      const fcRemain = fcTarget - fc;
+      const ptRemain = ptTarget - pt;
+      const totalTarget = fcTarget + ptTarget;
+      const totalRemain = fcRemain + ptRemain;
       targetBlock = `
-        <div class="stats-target-row"><span>FC 목표</span><b>${fmt(fcTarget)}</b></div>
-        <div class="stats-target-row"><span>FC 남은</span><b class="${fcTarget - fc < 0 ? 'neg' : ''}">${fmt(fcTarget - fc)}</b></div>
-        <div class="stats-target-row"><span>PT 목표</span><b>${fmt(ptTarget)}</b></div>
-        <div class="stats-target-row"><span>PT 남은</span><b class="${ptTarget - pt < 0 ? 'neg' : ''}">${fmt(ptTarget - pt)}</b></div>
+        <div class="stats-target-row"><span>FC 목표 매출</span><b>${fmt(fcTarget)}</b></div>
+        <div class="stats-target-row"><span>FC 남은 매출</span><b class="${fcRemain < 0 ? 'neg' : ''}">${fmt(fcRemain)}</b></div>
+        <div class="stats-target-row"><span>PT 목표 매출</span><b>${fmt(ptTarget)}</b></div>
+        <div class="stats-target-row"><span>PT 남은 매출</span><b class="${ptRemain < 0 ? 'neg' : ''}">${fmt(ptRemain)}</b></div>
+        <div class="stats-target-row stats-target-total"><span>총 목표 매출</span><b>${fmt(totalTarget)}</b></div>
+        <div class="stats-target-row stats-target-total"><span>총 남은 매출</span><b class="${totalRemain < 0 ? 'neg' : ''}">${fmt(totalRemain)}</b></div>
       `;
     }
     let deltaBlock = '';
@@ -140,8 +146,8 @@ const StatsTab = (() => {
       <div class="stats-card-v2">
         <h4>${escHtml(title)}</h4>
         <div class="stats-total">${fmt(total)}</div>
-        <div class="stats-row"><span>FC (부가세 제외)</span><b>${fmt(fc)}</b></div>
-        <div class="stats-row"><span>PT (계약금액)</span><b>${fmt(pt)}</b></div>
+        <div class="stats-row"><span>FC 매출 (부가세 제외)</span><b>${fmt(fc)}</b></div>
+        <div class="stats-row"><span>PT 매출 (계약금액)</span><b>${fmt(pt)}</b></div>
         ${deltaBlock}
         ${targetBlock}
         ${actionsBlock}
@@ -258,6 +264,8 @@ const StatsTab = (() => {
     const fmt = n => n.toLocaleString() + '원';
     const fcRemain = fcTarget - current.fc;
     const ptRemain = ptTarget - current.pt;
+    const totalTarget = fcTarget + ptTarget;
+    const totalRemain = fcRemain + ptRemain;
     return [
       `베라짐 미사점 ${m}월 ${weekNo}주차`,
       `현재 매출 보고드립니다.`,
@@ -265,17 +273,19 @@ const StatsTab = (() => {
       `FC 현재 매출 ${fmt(todayRev.fc)}`,
       `${m}월 ${d}일까지 누적 매출`,
       `${fmt(current.fc)} (부가세 제외)`,
-      `목표매출 ${fmt(fcTarget)}`,
-      `목표까지 남은매출 ${fmt(fcRemain)}`,
+      `FC 목표 매출 ${fmt(fcTarget)}`,
+      `FC 남은 매출 ${fmt(fcRemain)}`,
       ``,
       `PT 현재 매출 ${fmt(todayRev.pt)}`,
       `${m}월 ${d}일까지 누적 매출`,
-      `${fmt(current.pt)} (부가세 제외)`,
-      `목표매출 ${fmt(ptTarget)}`,
-      `목표까지 남은매출 ${fmt(ptRemain)}`,
+      `${fmt(current.pt)} (계약금액)`,
+      `PT 목표 매출 ${fmt(ptTarget)}`,
+      `PT 남은 매출 ${fmt(ptRemain)}`,
       ``,
       `금일 매출 ${fmt(todayRev.fc + todayRev.pt)}`,
-      `총 누적매출 ${fmt(current.fc + current.pt)} 입니다.`,
+      `총 누적매출 ${fmt(current.fc + current.pt)}`,
+      `총 목표 매출 ${fmt(totalTarget)}`,
+      `총 남은 매출 ${fmt(totalRemain)} 입니다.`,
     ].join('\n');
   }
 
