@@ -2162,3 +2162,35 @@ html, body {
 @media (max-width: 860px) {
   .stats-trend-grid { grid-template-columns: 1fr; }
 }
+
+/* 월별 목표 모달 */
+.target-weeks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.target-week-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.target-week-label { font-size: 13px; font-weight: 600; }
+.target-week-label small { display:block; color: var(--color-text-muted); font-size: 11px; font-weight: 400; }
+.target-week-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.target-week-inputs label { display:flex; align-items:center; gap:6px; font-size:12px; color: var(--color-text-secondary); }
+.target-week-inputs input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}

@@ -102,7 +102,7 @@ const StatsTab = (() => {
       });
     });
 
-    container.querySelector('#stats-set-target').addEventListener('click', () => openTargetModal(weekStart, fcTarget, ptTarget));
+    container.querySelector('#stats-set-target').addEventListener('click', () => openMonthlyTargetModal(y, m));
     container.querySelector('#stats-kakao-copy').addEventListener('click', () => {
       const text = buildKakaoText({ today, todayRev, current, fcTarget, ptTarget });
       navigator.clipboard.writeText(text)
@@ -177,41 +177,69 @@ const StatsTab = (() => {
     return out;
   }
 
-  // ───────── 목표 입력 모달 ─────────
-  function openTargetModal(weekStart, fc, pt) {
+  // ───────── 월별 목표 입력 모달 (해당 월에 걸치는 모든 주) ─────────
+  async function openMonthlyTargetModal(year, month) {
+    // 해당 월을 포함하는 주들의 월요일 목록
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay  = new Date(year, month, 0);
+    const weeks = [];
+    let cur = new Date(firstDay);
+    const curMon = new Date(cur);
+    const dow = curMon.getDay();
+    curMon.setDate(curMon.getDate() + (dow === 0 ? -6 : 1 - dow));  // 해당 월 1일이 속한 주 월요일
+    for (let d = new Date(curMon); d <= lastDay; d.setDate(d.getDate() + 7)) {
+      weeks.push(isoDate(d));
+    }
+
+    // 기존 목표 로드
+    const { data } = await supabase.from('revenue_targets')
+      .select('target_type, target_week, target_amount')
+      .in('target_week', weeks);
+    const existing = {};
+    (data || []).forEach(r => { existing[`${r.target_type}_${r.target_week}`] = r.target_amount; });
+
+    const rowsHtml = weeks.map((w, i) => {
+      const fcVal = existing[`FC_${w}`] ?? 0;
+      const ptVal = existing[`PT_${w}`] ?? 0;
+      return `
+        <div class="target-week-row">
+          <div class="target-week-label">${month}월 ${i + 1}주 <small>(${w}~)</small></div>
+          <div class="target-week-inputs">
+            <label>FC<input type="number" data-week="${w}" data-type="FC" value="${fcVal}" min="0" step="10000"></label>
+            <label>PT<input type="number" data-week="${w}" data-type="PT" value="${ptVal}" min="0" step="10000"></label>
+          </div>
+        </div>
+      `;
+    }).join('');
+
     Modal.open({
       type: 'center',
-      title: `주별 목표 매출 (${weekStart} 주)`,
-      size: 'sm',
+      title: `${year}년 ${month}월 주별 목표 매출`,
+      size: 'lg',
       html: `
         <form id="target-form">
-          <div class="form-group">
-            <label>FC 주별 목표 (원)</label>
-            <input type="number" name="fc_target" value="${fc}" min="0" step="10000">
-          </div>
-          <div class="form-group">
-            <label>PT 주별 목표 (원)</label>
-            <input type="number" name="pt_target" value="${pt}" min="0" step="10000">
-          </div>
+          <div class="target-weeks-list">${rowsHtml}</div>
           <div class="form-actions">
             <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
-            <button type="submit" class="btn btn-primary">저장</button>
+            <button type="submit" class="btn btn-primary">전체 저장</button>
           </div>
         </form>
       `,
       onOpen: (el) => {
         el.querySelector('#target-form').addEventListener('submit', async (e) => {
           e.preventDefault();
-          const fd = new FormData(e.target);
-          const fcVal = parseInt(fd.get('fc_target')) || 0;
-          const ptVal = parseInt(fd.get('pt_target')) || 0;
-          const upserts = [
-            { target_type: 'FC', target_week: weekStart, target_amount: fcVal, updated_at: new Date().toISOString() },
-            { target_type: 'PT', target_week: weekStart, target_amount: ptVal, updated_at: new Date().toISOString() },
-          ];
-          const { error } = await supabase.from('revenue_targets').upsert(upserts, { onConflict: 'target_type,target_week' });
+          const inputs = el.querySelectorAll('input[data-week]');
+          const nowIso = new Date().toISOString();
+          const upserts = Array.from(inputs).map(inp => ({
+            target_type: inp.dataset.type,
+            target_week: inp.dataset.week,
+            target_amount: parseInt(inp.value) || 0,
+            updated_at: nowIso,
+          }));
+          const { error } = await supabase.from('revenue_targets')
+            .upsert(upserts, { onConflict: 'target_type,target_week' });
           if (error) { Toast.error('저장 실패: ' + error.message); return; }
-          Toast.success('목표 저장됨');
+          Toast.success(`${weeks.length}주 목표 저장됨`);
           Modal.close();
           loadSubTab('trend');
         });
