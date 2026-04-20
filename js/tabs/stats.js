@@ -150,13 +150,12 @@ const StatsTab = (() => {
   }
 
   async function fetchRevenue(fromDate, toDate) {
-    const exList = [...excludedProducts];
-    let fcQuery = supabase.from('registrations')
+    // v5: 제외 상품 필터는 클라이언트에서 적용 (한글 값 PostgREST in 필터 파싱 이슈 회피)
+    const { data: fcData } = await supabase.from('registrations')
       .select('product, total_payment')
       .gte('registered_date', fromDate).lte('registered_date', toDate);
-    if (exList.length) fcQuery = fcQuery.not('product', 'in', `(${exList.map(p => `"${p}"`).join(',')})`);
-    const { data: fcData } = await fcQuery;
-    const fc = Math.round((fcData || []).reduce((s, r) => s + (r.total_payment || 0), 0) / 1.1);
+    const fcFiltered = (fcData || []).filter(r => !excludedProducts.has(r.product));
+    const fc = Math.round(fcFiltered.reduce((s, r) => s + (r.total_payment || 0), 0) / 1.1);
 
     const { data: ptData } = await supabase.from('pt_registrations')
       .select('contract_amount')
