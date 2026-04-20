@@ -199,9 +199,11 @@ const PtTab = (() => {
       return;
     }
 
-    // v10: 중복 방지 가드 — VeraGym 에 이미 동일 PT 존재 시 동기화 생략
+    // v12: 이미 동기화 / 중복 / 신규 성공 / 실패 4가지 분기
     if (data?.ok && data?.duplicate === true) {
       Toast.warning(data.note || 'VeraGym 에 이미 등록된 PT 입니다. 동기화를 생략했습니다.');
+    } else if (data?.ok && data?.already === true) {
+      Toast.info(data.note || '이미 동기화된 PT 등록입니다.');
     } else if (data?.ok) {
       Toast.success('동기화 성공');
     } else {
