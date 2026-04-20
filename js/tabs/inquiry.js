@@ -162,12 +162,14 @@ const InquiryTab = (() => {
     let merged = data || [];
     const phonesOnPage = [...new Set(merged.filter(r => r.phone && r.phone.trim()).map(r => r.phone))];
     if (phonesOnPage.length > 0) {
+      // v26: 성능 — 2차 fetch 에 전체 limit 적용 (phone × 과거 이력 폭증 방지)
       let pastQuery = supabase
         .from('inquiries')
         .select(selectStr)
         .in('phone', phonesOnPage)
         .order('inquiry_date', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(300);
       if (hasStatusFilter) pastQuery = pastQuery.eq('status', statusFilter);
       const { data: pastData } = await pastQuery;
       if (pastData && pastData.length) {

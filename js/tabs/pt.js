@@ -7,6 +7,9 @@
 const PtTab = (() => {
   let allPtRegs = [];
   let trainers = [];
+  // v13: DOM 렌더 페이지네이션 — 846행 한 번에 그리면 버벅거림
+  const PAGE_SIZE = 100;
+  let displayLimit = PAGE_SIZE;
 
   async function init() {
     await loadTrainers();
@@ -101,7 +104,7 @@ const PtTab = (() => {
     if (query) {
       const q = query.toLowerCase();
       filtered = allPtRegs.filter(r =>
-        r.name.toLowerCase().includes(q) || r.phone.includes(q)
+        (r.name || '').toLowerCase().includes(q) || (r.phone || '').includes(q)
       );
     }
 
@@ -109,6 +112,11 @@ const PtTab = (() => {
       listEl.innerHTML = '<div class="empty-state">PT등록 내역이 없습니다.</div>';
       return;
     }
+
+    // v13: 검색 없을 땐 DOM 렌더 페이지네이션 (초기 100건)
+    const totalCount = filtered.length;
+    const isPaged = !query;
+    if (isPaged) filtered = filtered.slice(0, displayLimit);
 
     // HTML escape 유틸
     const esc = (s) => String(s == null ? '' : s)
@@ -173,7 +181,21 @@ const PtTab = (() => {
         <div>액션</div>
       </div>
       <div class="pt-list-body">${rowsHtml}</div>
+      ${isPaged && totalCount > displayLimit ? `
+        <div style="text-align:center; padding:16px;">
+          <button class="btn btn-secondary" id="pt-load-more">
+            ${Math.min(PAGE_SIZE, totalCount - displayLimit)}건 더 보기 (${displayLimit}/${totalCount})
+          </button>
+        </div>
+      ` : ''}
     `;
+
+    // v13: 더 보기
+    const moreBtn = listEl.querySelector('#pt-load-more');
+    if (moreBtn) moreBtn.addEventListener('click', () => {
+      displayLimit += PAGE_SIZE;
+      renderList(document.querySelector('#tab-pt .search-box')?.value.trim() || '');
+    });
 
     // v12: 동기화/완료 버튼 둘 다 같은 핸들러 (완료 버튼은 info 토스트로 안내)
     listEl.querySelectorAll('.btn-retry, .btn-sync-done').forEach(btn => {
