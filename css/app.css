@@ -1332,6 +1332,17 @@ html, body {
   color: var(--color-primary);
   background: var(--color-primary-bg);
 }
+/* v12: 동기화 완료 상태 — 초록 배경 */
+.btn-action.btn-sync-done {
+  background: #d1fae5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+.btn-action.btn-sync-done:hover {
+  background: #a7f3d0;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
 
 /* Accordion — 과거 문의 */
 .inquiry-accordion-toggle {

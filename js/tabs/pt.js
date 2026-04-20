@@ -150,7 +150,9 @@ const PtTab = (() => {
             <div class="col-trainer">${esc(contractTrainer)}</div>
             <div class="col-trainer">${esc(assignedTrainer)}</div>
             <div class="col-actions inquiry-actions"${errorTooltip}>
-              <button class="btn-action btn-retry" data-id="${r.id}">동기화</button>
+              ${r.sync_status === 'synced' || r.sync_status === 'duplicate'
+                ? `<button class="btn-action btn-sync-done" data-id="${r.id}" title="이미 동기화됨">동기화 완료</button>`
+                : `<button class="btn-action btn-retry" data-id="${r.id}">동기화</button>`}
               <button class="btn-action btn-edit" data-id="${r.id}">수정</button>
             </div>
           </div>
@@ -173,8 +175,8 @@ const PtTab = (() => {
       <div class="pt-list-body">${rowsHtml}</div>
     `;
 
-    // 재시도 버튼 바인딩
-    listEl.querySelectorAll('.btn-retry').forEach(btn => {
+    // v12: 동기화/완료 버튼 둘 다 같은 핸들러 (완료 버튼은 info 토스트로 안내)
+    listEl.querySelectorAll('.btn-retry, .btn-sync-done').forEach(btn => {
       btn.addEventListener('click', () => retrySync(btn.dataset.id));
     });
 
