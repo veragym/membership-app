@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>회원권 회원관리</title>
+
+  <!-- Pretendard 폰트 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+  <!-- 스타일 -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css?v=36">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ═══ 로그인 화면 ═══ -->
+    <div id="login-screen" class="login-screen">
+      <div class="login-card">
+        <h1>회원권 회원관리</h1>
+        <p class="subtitle">VeraGym 관리자·상담 직원 전용</p>
+
+        <div id="login-error" class="login-error"></div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">아이디</label>
+            <input type="text" id="login-email" placeholder="admin 또는 이메일 입력" autocomplete="username" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">비밀번호</label>
+            <input type="password" id="login-password" placeholder="비밀번호 입력" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">로그인</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ═══ 메인 앱 (로그인 후) ═══ -->
+    <div id="app-main" style="display:none; flex-direction:column; height:100%;">
+
+      <!-- 헤더 -->
+      <header class="app-header">
+        <span class="logo">회원권 관리</span>
+        <div class="user-info">
+          <span id="user-name"></span>
+          <button id="btn-logout" class="btn-logout">로그아웃</button>
+        </div>
+      </header>
+
+      <!-- 탭 바 -->
+      <nav class="tab-bar">
+        <button class="tab-btn active" data-tab="inquiry">문의관리</button>
+        <button class="tab-btn" data-tab="stats">통계</button>
+        <button class="tab-btn" data-tab="pt">PT등록회원</button>
+        <button class="tab-btn" data-tab="promo">홍보관리</button>
+        <!-- 설정 탭: admin 전용 (로그인 후 Auth.isPureAdmin 체크로 표시/숨김) -->
+        <button class="tab-btn tab-admin-only" data-tab="settings" style="display:none;">설정</button>
+      </nav>
+
+      <!-- 탭 콘텐츠 -->
+      <main class="tab-content">
+
+        <!-- 문의관리 -->
+        <div id="tab-inquiry" class="tab-pane active"></div>
+
+        <!-- 통계 -->
+        <div id="tab-stats" class="tab-pane"></div>
+
+        <!-- PT등록회원 -->
+        <div id="tab-pt" class="tab-pane"></div>
+
+        <!-- 홍보관리 -->
+        <div id="tab-promo" class="tab-pane"></div>
+
+        <!-- 설정 (admin 전용) -->
+        <div id="tab-settings" class="tab-pane"></div>
+
+      </main>
+    </div>
+
+  </div>
+
+  <!-- ═══ Scripts ═══ -->
+  <!-- Supabase JS v2 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- SheetJS (엑셀 파싱) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- JSZip (xlsx 파일 구조 직접 조작 — id 열 hidden 속성 주입용) -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <!-- App (v=16: 설정 탭 신설(드롭다운 마스터 관리) + 등록폼·PT폼 드롭다운 치환 2026-04-17) -->
+  <script src="js/config.js?v=2"></script>
+  <script src="js/api.js?v=2"></script>
+  <script src="js/utils.js?v=3"></script>
+  <script src="js/components/toast.js?v=2"></script>
+  <script src="js/components/modal.js?v=2"></script>
+  <script src="js/components/dropdown.js?v=3"></script>
+  <script src="js/auth.js?v=2"></script>
+  <script src="js/tabs/inquiry.js?v=26"></script>
+  <script src="js/tabs/stats.js?v=3"></script>
+  <script src="js/tabs/pt.js?v=28"></script>
+  <script src="js/tabs/promo.js?v=2"></script>
+  <script src="js/tabs/import.js?v=22"></script>
+  <script src="js/tabs/settings.js?v=3"></script>
+  <script src="js/app.js?v=4"></script>
+</body>
+</html>

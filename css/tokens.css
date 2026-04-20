@@ -1,0 +1,50 @@
+/* ══════════════════════════════════════════════════
+   Design Tokens — iOS White/Orange
+   ══════════════════════════════════════════════════ */
+
+:root {
+  /* ── Primary (주황, 토스 오렌지 톤) ── */
+  --color-primary: #FF6B35;
+  --color-primary-dark: #E85A2A;
+  --color-primary-light: #FF8A5C;
+  --color-primary-bg: #FFF2EC;
+  --color-primary-border: #FFD4BF;
+
+  /* ── Neutral ── */
+  --color-bg-0: #FAFAFA;
+  --color-bg-1: #FFFFFF;
+  --color-bg-2: #F5F5F5;
+  --color-border: #E5E5E5;
+  --color-border-strong: #D4D4D4;
+  --color-divider: #EEEEEE;
+
+  /* ── Text ── */
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #666666;
+  --color-text-muted: #999999;
+  --color-text-on-primary: #FFFFFF;
+
+  /* ── Semantic ── */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-info: #3B82F6;
+
+  /* ── Radius (iOS) ── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* ── Shadow (iOS soft) ── */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
+  --shadow-modal: 0 20px 60px rgba(255,107,53,0.15);
+
+  /* ── Spacing & sizing ── */
+  --touch-min: 44px;
+  --font-family: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+}
