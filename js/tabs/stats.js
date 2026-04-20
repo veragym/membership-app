@@ -261,7 +261,13 @@ const StatsTab = (() => {
   }
 
   // ───────── 유틸 ─────────
-  function isoDate(dt) { return dt.toISOString().slice(0, 10); }
+  // v6: 로컬 타임존 기준 YYYY-MM-DD. toISOString()은 UTC라 KST 자정 이전이면 하루 밀려 월/년 경계가 어긋남.
+  function isoDate(dt) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
   function weekMonday(dt) {
     const d = new Date(dt);
     const day = d.getDay();
