@@ -1,5 +1,4 @@
-# Supabase 비밀값 — config.example.js 템플릿만 커밋
-js/config.js
+# Supabase 설정 — anon key 는 RLS 가드로 공개 무방하므로 커밋. config.example.js 는 템플릿 용도로만 유지.
 
 # Claude Code / Harness 로컬 설정
 .claude/
