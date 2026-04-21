@@ -2286,14 +2286,23 @@ html, body {
   background: var(--color-bg-2);
   color: var(--color-text-secondary);
 }
-.spt-status-pending      { background: var(--color-bg-2);  color: var(--color-text-secondary); }
-.spt-status-in-progress  { background: var(--color-primary-bg); color: var(--color-primary); }
-.spt-status-completed    { background: #D1FAE5; color: #065F46; }
-.spt-status-rejected     { background: #E5E7EB; color: #374151; }
-.spt-status-unreachable  { background: #FEE2E2; color: #991B1B; }
-.spt-status-other        { background: #FEF3C7; color: #92400E; }
-.spt-status-managing     { background: #EDE9FE; color: #5B21B6; }
-.spt-status-registered   { background: #DBEAFE; color: #1D4ED8; }
+/* 상태별 색상 계열:
+   진행전→노랑, 진행중→초록, 등록→파랑, 관리중→주황,
+   완료→보라, 거부/연락안됨/기타→빨강 */
+.spt-status-pending      { background: #FEF3C7; color: #92400E; }  /* 노랑 */
+.spt-status-in-progress  { background: #D1FAE5; color: #065F46; }  /* 초록 */
+.spt-status-registered   { background: #DBEAFE; color: #1D4ED8; }  /* 파랑 */
+.spt-status-managing     { background: #FFEDD5; color: #9A3412; }  /* 주황 */
+.spt-status-completed    { background: #EDE9FE; color: #5B21B6; }  /* 보라 */
+.spt-status-rejected     { background: #FEE2E2; color: #991B1B; }  /* 빨강 */
+.spt-status-unreachable  { background: #FEE2E2; color: #991B1B; }  /* 빨강 */
+.spt-status-other        { background: #FEE2E2; color: #991B1B; }  /* 빨강 */
+
+/* 담당T 미배정 — bold + 주황 */
+.spt-cell-trainer-unassigned {
+  font-weight: 700;
+  color: #EA580C;
+}
 
 /* ═══════════════════════════════════════════════════════════
    SPT 탭 — 문의관리(.inquiry-table-header / .inquiry-card-main)
@@ -2307,12 +2316,12 @@ html, body {
     106px                   /* 연락처 */
     52px                    /* 오전/오후 */
     76px                    /* 담당트레이너 */
-    minmax(80px, 1fr)       /* 관리자 메모 */
+    minmax(80px, 1.4fr)     /* 관리자 메모 (확장) */
     60px                    /* 진행상태 */
     52px                    /* spt1 */
     52px                    /* spt2 */
-    minmax(160px, 2fr)      /* 최신 코멘트 */
-    100px;                  /* 액션 (수정) */
+    minmax(128px, 1.6fr)    /* 최신 코멘트 (80%로 축소) */
+    56px;                   /* 액션 (수정만) */
 }
 
 /* 카드 리스트 컨테이너 */

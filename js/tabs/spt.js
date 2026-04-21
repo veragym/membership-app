@@ -377,7 +377,9 @@ const SptTab = (() => {
   function renderCard(r) {
     const memberId = r.member_id;
     const overall = deriveOverallStatus(r);
-    const trainerLabel = r.trainer_name ? escHtml(r.trainer_name) : '미배정';
+    const trainerLabel = r.trainer_name
+      ? escHtml(r.trainer_name)
+      : '<span class="spt-cell-trainer-unassigned">미배정</span>';
     const slot = escHtml(r.preferred_time_slot || '전체');
     const isOpen = expandedMembers.has(memberId);
     const isCommentsOpen = expandedComments.has(memberId);
