@@ -1,8 +1,12 @@
 /**
  * 통계 탭 v2 — 세부탭 2개 [매출 추이] [기간별 비교]
  *
- * [매출 추이]
- *   3카드: 현재 매출 / 전월 대비 / 전년 대비
+ * [매출 추이] (v3 개편)
+ *   3카드: 당월 매출 / 전월 대비 / 전년 대비
+ *   "당월 매출" 카드 상단에 [금일 매출 | 당월 매출] 병치 행
+ *   FC/PT 섹션: 총매출 + 금일매출 병치
+ *   주차 목표 구분선(N주차) 하단: FC/PT/총 목표·남은 매출 (**주차 매출 기준**)
+ *
  *   회원권(registrations): total_payment / 1.1 (부가세 제외)
  *   PT(pt_registrations): contract_amount (그대로)
  *   상품 제외 필터 (localStorage) · 주별 목표(revenue_targets) · 카카오톡 복사
@@ -54,22 +58,26 @@ const StatsTab = (() => {
     const lastMonth  = { y: m === 1 ? y - 1 : y, m: m === 1 ? 12 : m - 1 };
     const lastYear   = { y: y - 1, m };
 
+    // 당월/전월/전년 누적
     const current = await fetchRevenue(monthStart, isoDate(today));
     const lastM   = await fetchRevenue(isoDate(new Date(lastMonth.y, lastMonth.m - 1, 1)), isoDate(new Date(lastMonth.y, lastMonth.m, 0)));
     const lastY   = await fetchRevenue(isoDate(new Date(lastYear.y, lastYear.m - 1, 1)), isoDate(new Date(lastYear.y, lastYear.m, 0)));
 
-    const weekStart = weekMonday(today);
-    const targets = await fetchTargets(weekStart);
+    // v3: 주차 계산 (openMonthlyTargetModal v8 규칙과 일치)
+    const weekInfo = computeWeekInfo(today);
+    const targets = await fetchTargets(weekInfo.weekStartISO);
     const fcTarget = targets.FC ?? 0;
     const ptTarget = targets.PT ?? 0;
 
-    // 오늘 매출 (카톡 템플릿용)
+    // v3: 주차 매출 (주 시작 ~ 오늘, 오늘까지 누적). 남은 매출 계산은 주차 기준.
+    const weekRev = await fetchRevenue(weekInfo.weekStartISO, isoDate(today));
+
+    // 금일 매출
     const todayRev = await fetchRevenue(isoDate(today), isoDate(today));
 
     // 상품 목록 (제외 필터용)
     if (allProducts.length === 0) await loadProducts();
 
-    // v4: 제외 상품 토글을 서브탭 바로 아래로, 버튼은 현재 매출 카드 하단 내부에, 3카드 그리드는 하단까지 채움
     container.innerHTML = `
       <div class="stats-filter-panel">
         <details class="stats-filter-details">
@@ -86,7 +94,10 @@ const StatsTab = (() => {
       </div>
 
       <div class="stats-trend-grid">
-        ${renderCard('현재 매출', current, fcTarget, ptTarget, { current: true, withActions: true })}
+        ${renderCard('당월 매출', current, fcTarget, ptTarget, {
+          current: true, withActions: true,
+          todayRev, weekRev, weekInfo
+        })}
         ${renderCard(`전월 대비 (${lastMonth.m}월)`, lastM, null, null, { compareBase: current })}
         ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
       </div>
@@ -104,7 +115,7 @@ const StatsTab = (() => {
 
     container.querySelector('#stats-set-target').addEventListener('click', () => openMonthlyTargetModal(y, m));
     container.querySelector('#stats-kakao-copy').addEventListener('click', () => {
-      const text = buildKakaoText({ today, todayRev, current, fcTarget, ptTarget });
+      const text = buildKakaoText({ today, todayRev, current, weekRev, weekInfo, fcTarget, ptTarget });
       navigator.clipboard.writeText(text)
         .then(() => Toast.success('카카오톡 메시지가 복사되었습니다'))
         .catch(() => Toast.error('복사 실패'));
@@ -114,13 +125,48 @@ const StatsTab = (() => {
   function renderCard(title, rev, fcTarget, ptTarget, opts = {}) {
     const fc = rev.fc, pt = rev.pt, total = fc + pt;
     const fmt = n => n.toLocaleString() + '원';
+
+    // v3: 당월 카드 전용 — 금일 매출 병치 헤더 + FC/PT 섹션 내 금일 병치
+    let topTodayBlock = '';
+    let fcRow = `<div class="stats-row"><span>FC 총 매출 (부가세 제외)</span><b>${fmt(fc)}</b></div>`;
+    let ptRow = `<div class="stats-row"><span>PT 매출 (계약금액)</span><b>${fmt(pt)}</b></div>`;
+    if (opts.current && opts.todayRev) {
+      const t = opts.todayRev;
+      const todayTotal = (t.fc || 0) + (t.pt || 0);
+      topTodayBlock = `
+        <div class="stats-today-grid">
+          <div class="stats-today-col">
+            <div class="stats-today-label">금일 매출</div>
+            <div class="stats-today-value">${fmt(todayTotal)}</div>
+            <div class="stats-today-hint">(금일 등록된 매출)</div>
+          </div>
+          <div class="stats-today-col stats-today-col-month">
+            <div class="stats-today-label">당월 매출</div>
+            <div class="stats-today-value">${fmt(total)}</div>
+          </div>
+        </div>
+      `;
+      fcRow = `
+        <div class="stats-row"><span>FC 총 매출 (부가세 제외)</span><b>${fmt(fc)}</b></div>
+        <div class="stats-row stats-row-today"><span>FC 금일 매출</span><b>${fmt(t.fc || 0)}</b></div>
+      `;
+      ptRow = `
+        <div class="stats-row"><span>PT 매출 (계약금액)</span><b>${fmt(pt)}</b></div>
+        <div class="stats-row stats-row-today"><span>PT 금일 매출</span><b>${fmt(t.pt || 0)}</b></div>
+      `;
+    }
+
+    // v3: 주차 목표/남은 섹션 — 남은 매출 = 주차 목표 - 주차 매출 (버그 수정)
     let targetBlock = '';
     if (opts.current) {
-      const fcRemain = fcTarget - fc;
-      const ptRemain = ptTarget - pt;
+      const weekRev = opts.weekRev || { fc: 0, pt: 0 };
+      const weekInfo = opts.weekInfo || { weekNumber: 0 };
+      const fcRemain = fcTarget - weekRev.fc;
+      const ptRemain = ptTarget - weekRev.pt;
       const totalTarget = fcTarget + ptTarget;
       const totalRemain = fcRemain + ptRemain;
       targetBlock = `
+        <div class="stats-target-divider">${weekInfo.weekNumber}주차 목표 매출</div>
         <div class="stats-target-row"><span>FC 목표 매출</span><b>${fmt(fcTarget)}</b></div>
         <div class="stats-target-row"><span>FC 남은 매출</span><b class="${fcRemain < 0 ? 'neg' : ''}">${fmt(fcRemain)}</b></div>
         <div class="stats-target-row"><span>PT 목표 매출</span><b>${fmt(ptTarget)}</b></div>
@@ -129,27 +175,41 @@ const StatsTab = (() => {
         <div class="stats-target-row stats-target-total"><span>총 남은 매출</span><b class="${totalRemain < 0 ? 'neg' : ''}">${fmt(totalRemain)}</b></div>
       `;
     }
+
     let deltaBlock = '';
     if (opts.compareBase) {
       const diff = opts.compareBase.fc + opts.compareBase.pt - total;
       const pct = total > 0 ? Math.round(((opts.compareBase.fc + opts.compareBase.pt) / total - 1) * 100) : 0;
       deltaBlock = `<div class="stats-delta ${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${fmt(diff)} (${pct >= 0 ? '+' : ''}${pct}%)</div>`;
     }
-    // v4: 현재 매출 카드 하단에 액션 버튼 (주별 목표 수정 / 카카오톡 복사)
+
     const actionsBlock = opts.withActions ? `
       <div class="stats-card-actions">
         <button class="btn btn-secondary" id="stats-set-target">주별 목표 수정</button>
         <button class="btn btn-primary" id="stats-kakao-copy">카카오톡으로 복사하기</button>
       </div>
     ` : '';
+
+    // 당월 카드: 상단 금일/당월 grid + FC/PT 행 + 구분선 + 목표. 나머지 카드: 기존 레이아웃.
+    if (opts.current) {
+      return `
+        <div class="stats-card-v2 stats-card-current">
+          <h4>${escHtml(title)}</h4>
+          ${topTodayBlock}
+          ${fcRow}
+          ${ptRow}
+          ${targetBlock}
+          ${actionsBlock}
+        </div>
+      `;
+    }
     return `
       <div class="stats-card-v2">
         <h4>${escHtml(title)}</h4>
         <div class="stats-total">${fmt(total)}</div>
-        <div class="stats-row"><span>FC 매출 (부가세 제외)</span><b>${fmt(fc)}</b></div>
-        <div class="stats-row"><span>PT 매출 (계약금액)</span><b>${fmt(pt)}</b></div>
+        ${fcRow}
+        ${ptRow}
         ${deltaBlock}
-        ${targetBlock}
         ${actionsBlock}
       </div>
     `;
@@ -258,25 +318,27 @@ const StatsTab = (() => {
   }
 
   // ───────── 카카오톡 템플릿 ─────────
-  function buildKakaoText({ today, todayRev, current, fcTarget, ptTarget }) {
+  // v3: 주차 번호/주차 매출 기준. 남은 매출 = 주차 목표 - 주차 매출.
+  function buildKakaoText({ today, todayRev, current, weekRev, weekInfo, fcTarget, ptTarget }) {
     const m = today.getMonth() + 1, d = today.getDate();
-    const weekNo = Math.ceil(d / 7);
+    const weekNo = weekInfo?.weekNumber || 1;
     const fmt = n => n.toLocaleString() + '원';
-    const fcRemain = fcTarget - current.fc;
-    const ptRemain = ptTarget - current.pt;
+    const wk = weekRev || { fc: 0, pt: 0 };
+    const fcRemain = fcTarget - wk.fc;
+    const ptRemain = ptTarget - wk.pt;
     const totalTarget = fcTarget + ptTarget;
     const totalRemain = fcRemain + ptRemain;
     return [
       `베라짐 미사점 ${m}월 ${weekNo}주차`,
       `현재 매출 보고드립니다.`,
       ``,
-      `FC 현재 매출 ${fmt(todayRev.fc)}`,
+      `FC 금일 매출 ${fmt(todayRev.fc)}`,
       `${m}월 ${d}일까지 누적 매출`,
       `${fmt(current.fc)} (부가세 제외)`,
       `FC 목표 매출 ${fmt(fcTarget)}`,
       `FC 남은 매출 ${fmt(fcRemain)}`,
       ``,
-      `PT 현재 매출 ${fmt(todayRev.pt)}`,
+      `PT 금일 매출 ${fmt(todayRev.pt)}`,
       `${m}월 ${d}일까지 누적 매출`,
       `${fmt(current.pt)} (계약금액)`,
       `PT 목표 매출 ${fmt(ptTarget)}`,
@@ -316,6 +378,46 @@ const StatsTab = (() => {
     const diff = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + diff);
     return isoDate(d);
+  }
+
+  // v3: openMonthlyTargetModal v8 규칙과 일치하는 주차 계산
+  //   - 1주차: 월 1일 ~ 다음 월요일 직전 (1일이 무슨 요일이든)
+  //   - 2주차 이후: 월요일~일요일 (단, 월 경계를 넘지 않고 말일에서 잘림)
+  // 반환: { weekNumber, weekStart, weekEnd, weekStartISO }
+  function computeWeekInfo(date) {
+    const y = date.getFullYear(), m = date.getMonth() + 1;
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay  = new Date(y, m, 0);
+    const weeks = [];
+    // 1주차 시작 = 1일
+    weeks.push(new Date(firstDay));
+    // 1일 다음 월요일 계산
+    const dow = firstDay.getDay();
+    const daysToMon = dow === 0 ? 1 : (8 - dow);
+    const nextMon = new Date(firstDay);
+    nextMon.setDate(nextMon.getDate() + daysToMon);
+    for (let d = new Date(nextMon); d <= lastDay; d.setDate(d.getDate() + 7)) {
+      weeks.push(new Date(d));
+    }
+    // date 가 속한 주 찾기: 각 주의 시작일 이상인 것 중 마지막
+    let idx = 0;
+    for (let i = 0; i < weeks.length; i++) {
+      if (date >= weeks[i]) idx = i;
+      else break;
+    }
+    const weekStart = weeks[idx];
+    // 해당 주의 끝 = 다음 주 시작 - 1일, 없으면 월말
+    const nextStart = weeks[idx + 1];
+    const weekEnd = nextStart
+      ? new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1)
+      : new Date(lastDay);
+    return {
+      weekNumber: idx + 1,
+      weekStart,
+      weekEnd,
+      weekStartISO: isoDate(weekStart),
+      weekEndISO: isoDate(weekEnd),
+    };
   }
 
   return { init };
