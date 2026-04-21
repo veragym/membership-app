@@ -440,8 +440,8 @@ const InquiryTab = (() => {
               <input type="number" name="total_payment_card" value="${existing?.registration?.total_payment_card ?? 0}" min="0">
             </div>
             <div class="form-group full">
-              <label>총결제액 (원, 자동 합산 / 직접 수정 가능)</label>
-              <input type="number" id="inq-edit-total-payment" name="total_payment" value="${existing?.registration?.total_payment ?? ((existing?.registration?.total_payment_cash ?? 0) + (existing?.registration?.total_payment_card ?? 0))}" min="0">
+              <label>총결제액 (원) — 수정 시 카드 자동 조정</label>
+              <input type="number" id="inq-edit-total-payment" value="${(existing?.registration?.total_payment_cash ?? 0) + (existing?.registration?.total_payment_card ?? 0)}" min="0">
             </div>` : ''}
             <!-- v25: 미등록자 수정 모드에선 담당자 필드 숨김 (입력해도 저장 불가였던 유실 이슈 해결). 등록 시 [+등록] 모달에서 입력. -->
             <div class="form-group full">
@@ -490,8 +490,8 @@ const InquiryTab = (() => {
                 <input type="number" name="total_payment_card" value="0" min="0">
               </div>
               <div class="form-group full">
-                <label>총결제액 (원, 자동 합산 / 직접 수정 가능)</label>
-                <input type="number" id="inq-total-payment" name="total_payment" value="0" min="0" placeholder="현금+카드 자동합산. 할인 등 직접 수정 가능">
+                <label>총결제액 (원) — 수정 시 카드 자동 조정</label>
+                <input type="number" id="inq-total-payment" value="0" min="0" placeholder="총액 입력 시 카드가 총액-현금으로 자동 세팅">
               </div>
             </div>
           </div>
@@ -521,22 +521,26 @@ const InquiryTab = (() => {
           Dropdown.create({ container: el.querySelector('#dd-inq-contract-manager'), category: '매출담당자', name: 'contract_manager', value: existing?.registration?.contract_manager || '' });
           Dropdown.create({ container: el.querySelector('#dd-inq-sales-manager'), category: '매출담당자', name: 'sales_manager', value: existing?.registration?.sales_manager || '' });
 
-          // 결제액 자동 합산 (수동 수정 시 중단) — 기존 total_payment 값이 cash+card와 다르면 이미 수동 수정된 것으로 간주
+          // 결제액: cash/card 변경 → 총액 재계산, 총액 변경 → 카드 자동 조정
+          // total_payment는 DB GENERATED 컬럼이라 cash/card만 저장하면 자동 합산됨
           const editCashInput = el.querySelector('input[name="total_payment_cash"]');
           const editCardInput = el.querySelector('input[name="total_payment_card"]');
           const editTotalEl = el.querySelector('#inq-edit-total-payment');
-          const existingTotal = existing?.registration?.total_payment;
-          const existingSum = (existing?.registration?.total_payment_cash ?? 0) + (existing?.registration?.total_payment_card ?? 0);
-          let editTotalManuallyEdited = existingTotal != null && existingTotal !== existingSum;
-          const editUpdateTotal = () => {
-            if (editTotalManuallyEdited) return;
-            const cash = parseInt(editCashInput.value) || 0;
-            const card = parseInt(editCardInput.value) || 0;
-            editTotalEl.value = cash + card;
+          const editSyncTotalFromParts = () => {
+            editTotalEl.value = (parseInt(editCashInput.value) || 0) + (parseInt(editCardInput.value) || 0);
           };
-          editCashInput.addEventListener('input', editUpdateTotal);
-          editCardInput.addEventListener('input', editUpdateTotal);
-          editTotalEl.addEventListener('input', () => { editTotalManuallyEdited = true; });
+          editCashInput.addEventListener('input', editSyncTotalFromParts);
+          editCardInput.addEventListener('input', editSyncTotalFromParts);
+          editTotalEl.addEventListener('input', () => {
+            const total = parseInt(editTotalEl.value) || 0;
+            const cash = parseInt(editCashInput.value) || 0;
+            if (total >= cash) {
+              editCardInput.value = total - cash;
+            } else {
+              editCashInput.value = total;
+              editCardInput.value = 0;
+            }
+          });
         }
 
         // v7: 신규 문의일 때만 등록 토글 + 결제 섹션 (매출담당도 여기에 포함)
@@ -561,16 +565,23 @@ const InquiryTab = (() => {
           const cashInput = el.querySelector('input[name="total_payment_cash"]');
           const cardInput = el.querySelector('input[name="total_payment_card"]');
           const totalEl = el.querySelector('#inq-total-payment');
-          let totalManuallyEdited = false;
-          const updateTotal = () => {
-            if (totalManuallyEdited) return;
-            const cash = parseInt(cashInput.value) || 0;
-            const card = parseInt(cardInput.value) || 0;
-            totalEl.value = cash + card;
+          // cash/card 변경 → 총액 재계산 (DB는 generated 컬럼이라 어차피 서버에서 cash+card로 저장)
+          const syncTotalFromParts = () => {
+            totalEl.value = (parseInt(cashInput.value) || 0) + (parseInt(cardInput.value) || 0);
           };
-          cashInput.addEventListener('input', updateTotal);
-          cardInput.addEventListener('input', updateTotal);
-          totalEl.addEventListener('input', () => { totalManuallyEdited = true; });
+          cashInput.addEventListener('input', syncTotalFromParts);
+          cardInput.addEventListener('input', syncTotalFromParts);
+          // 총액 직접 수정 → 카드 자동 조정 (total - cash). 음수면 cash를 total로 낮추고 card=0.
+          totalEl.addEventListener('input', () => {
+            const total = parseInt(totalEl.value) || 0;
+            const cash = parseInt(cashInput.value) || 0;
+            if (total >= cash) {
+              cardInput.value = total - cash;
+            } else {
+              cashInput.value = total;
+              cardInput.value = 0;
+            }
+          });
         }
 
         // 폼 제출
@@ -637,7 +648,7 @@ const InquiryTab = (() => {
         product: regProduct,
         total_payment_cash: parseInt(fd.get('total_payment_cash')) || 0,
         total_payment_card: parseInt(fd.get('total_payment_card')) || 0,
-        total_payment: (() => { const v = fd.get('total_payment'); return v === '' || v == null ? null : (parseInt(v) || 0); })(),
+        // total_payment은 DB GENERATED 컬럼이라 payload에 포함 금지
         // v7.1: 추가 모드에서는 등록 섹션의 reg_contract_manager / reg_sales_manager 사용
         contract_manager: fd.get('reg_contract_manager')?.trim() || null,
         sales_manager: fd.get('reg_sales_manager')?.trim() || null,
@@ -664,7 +675,7 @@ const InquiryTab = (() => {
       if (contractManager !== null) regUpdate.contract_manager = contractManager;
       if (salesManager !== null) regUpdate.sales_manager = salesManager;
 
-      // 결제액 3필드 — 수정 모달에 존재할 때만 form에서 읽힘 (fd.has로 확인)
+      // 결제액 cash/card만 UPDATE (total_payment은 DB GENERATED 컬럼 — 저장 금지)
       if (fd.has('total_payment_cash')) {
         const cashVal = parseInt(fd.get('total_payment_cash'));
         if (Number.isFinite(cashVal)) regUpdate.total_payment_cash = cashVal;
@@ -672,11 +683,6 @@ const InquiryTab = (() => {
       if (fd.has('total_payment_card')) {
         const cardVal = parseInt(fd.get('total_payment_card'));
         if (Number.isFinite(cardVal)) regUpdate.total_payment_card = cardVal;
-      }
-      if (fd.has('total_payment')) {
-        const v = fd.get('total_payment');
-        const totalVal = (v === '' || v == null) ? null : (parseInt(v) || 0);
-        if (totalVal !== null) regUpdate.total_payment = totalVal;
       }
 
       if (Object.keys(regUpdate).length > 0) {
@@ -724,8 +730,8 @@ const InquiryTab = (() => {
               <input type="number" name="total_payment_card" value="0" min="0">
             </div>
             <div class="form-group full">
-              <label>총결제액 (원, 자동 합산 / 직접 수정 가능)</label>
-              <input type="number" id="reg-total-payment" name="total_payment" value="0" min="0" placeholder="현금+카드 자동합산. 할인 등 직접 수정 가능">
+              <label>총결제액 (원) — 수정 시 카드 자동 조정</label>
+              <input type="number" id="reg-total-payment" value="0" min="0" placeholder="총액 입력 시 카드가 총액-현금으로 자동 세팅">
             </div>
             <div class="form-group">
               <label>계약직원</label>
@@ -756,20 +762,25 @@ const InquiryTab = (() => {
         Dropdown.create({ container: el.querySelector('#dd-reg-contract-manager'), category: '매출담당자', name: 'contract_manager', value: '' });
         Dropdown.create({ container: el.querySelector('#dd-reg-sales-manager'), category: '매출담당자', name: 'sales_manager', value: '' });
 
-        // v7: 총결제액 자동 합산 (수동 수정 시 자동 합산 중단)
+        // 결제액: cash/card → 총액 자동 합산, 총액 → 카드 자동 조정 (DB GENERATED 컬럼 대응)
         const cashInput = el.querySelector('input[name="total_payment_cash"]');
         const cardInput = el.querySelector('input[name="total_payment_card"]');
         const totalEl = el.querySelector('#reg-total-payment');
-        let totalManuallyEdited = false;
-        const updateTotal = () => {
-          if (totalManuallyEdited) return;
-          const cash = parseInt(cashInput.value) || 0;
-          const card = parseInt(cardInput.value) || 0;
-          totalEl.value = cash + card;
+        const syncTotalFromParts = () => {
+          totalEl.value = (parseInt(cashInput.value) || 0) + (parseInt(cardInput.value) || 0);
         };
-        cashInput.addEventListener('input', updateTotal);
-        cardInput.addEventListener('input', updateTotal);
-        totalEl.addEventListener('input', () => { totalManuallyEdited = true; });
+        cashInput.addEventListener('input', syncTotalFromParts);
+        cardInput.addEventListener('input', syncTotalFromParts);
+        totalEl.addEventListener('input', () => {
+          const total = parseInt(totalEl.value) || 0;
+          const cash = parseInt(cashInput.value) || 0;
+          if (total >= cash) {
+            cardInput.value = total - cash;
+          } else {
+            cashInput.value = total;
+            cardInput.value = 0;
+          }
+        });
 
         el.querySelector('#registration-form').addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -790,7 +801,7 @@ const InquiryTab = (() => {
       product: fd.get('product')?.trim(),
       total_payment_cash: (() => { const v = fd.get('total_payment_cash'); return v === '' || v == null ? 0 : (parseInt(v) || 0); })(),
       total_payment_card: (() => { const v = fd.get('total_payment_card'); return v === '' || v == null ? 0 : (parseInt(v) || 0); })(),
-      total_payment: (() => { const v = fd.get('total_payment'); return v === '' || v == null ? null : (parseInt(v) || 0); })(),
+      // total_payment은 DB GENERATED 컬럼이라 payload에 포함 금지 (cash+card 자동 계산)
       contract_manager: fd.get('contract_manager')?.trim() || null,  // v6: 계약직원
       sales_manager: fd.get('sales_manager')?.trim() || null,        // v6: 매출담당직원
       // v25: 빈 값이면 null, '0'이면 0 유지 (의도적 0회 입력 보존)
@@ -829,19 +840,7 @@ const InquiryTab = (() => {
       return;
     }
 
-    // 총결제액이 현금+카드 자동합산과 다르면(사용자가 직접 수정한 경우) 별도 UPDATE로 반영
-    // RPC는 자동합산값으로 세팅하므로, 수동 수정값은 2-step으로 override
-    const autoTotal = payload.total_payment_cash + payload.total_payment_card;
-    if (payload.total_payment !== null && payload.total_payment !== autoTotal) {
-      const { error: updErr } = await supabase
-        .from('registrations')
-        .update({ total_payment: payload.total_payment })
-        .eq('inquiry_id', inquiry.id);
-      if (updErr) {
-        Toast.warning('등록은 완료됐으나 총결제액 수정값 반영 실패: ' + updErr.message);
-      }
-    }
-
+    // total_payment은 DB GENERATED 컬럼이라 override 불가 — cash/card가 이미 RPC로 저장됐으므로 자동 합산됨
     Toast.success('회원권 등록 완료');
     Modal.close();
     await loadInquiries();
