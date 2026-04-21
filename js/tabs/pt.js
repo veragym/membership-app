@@ -336,6 +336,10 @@ const PtTab = (() => {
 
           <div class="form-grid" style="margin-top:16px;">
             <div class="form-group">
+              <label>PT등록날짜 *</label>
+              <input type="date" name="contract_date" value="${isEdit ? (editRecord.contract_date || '') : new Date().toISOString().slice(0, 10)}" required>
+            </div>
+            <div class="form-group">
               <label>횟수 *</label>
               <input type="number" name="pt_count" min="1" placeholder="예: 30" value="${initCount}" required>
             </div>
@@ -549,6 +553,8 @@ const PtTab = (() => {
       total_payment_card: card,
       contract_trainer_id: contractTrainerId,
       assigned_trainer_id: assignedTrainerId,
+      // PT등록날짜 — 신규/수정 모두 폼 값 우선. 빈 값이면 오늘 default (신규 때 정렬 이슈 방지).
+      contract_date: fd.get('contract_date') || new Date().toISOString().slice(0, 10),
     };
 
     // v8: 수정 모드 UPDATE / 신규 모드 INSERT 분기
@@ -561,8 +567,6 @@ const PtTab = (() => {
     } else {
       payload.name = name;
       payload.phone = phone;
-      // v11: 신규 등록 시 contract_date 기본값 = 오늘 (누락 시 리스트 정렬 맨 뒤로 밀리는 이슈 방지)
-      payload.contract_date = new Date().toISOString().slice(0, 10);
       ({ error } = await supabase
         .from('pt_registrations')
         .insert(payload)

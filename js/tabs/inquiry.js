@@ -462,6 +462,10 @@ const InquiryTab = (() => {
                 <input type="date" name="registered_date" value="${new Date().toISOString().slice(0, 10)}">
               </div>
               <div class="form-group">
+                <label>계약직원</label>
+                <div id="dd-inq-reg-contract-manager"></div>
+              </div>
+              <div class="form-group">
                 <label>매출담당직원</label>
                 <div id="dd-inq-reg-sales-manager"></div>
               </div>
@@ -474,8 +478,8 @@ const InquiryTab = (() => {
                 <input type="number" name="total_payment_card" value="0" min="0">
               </div>
               <div class="form-group full">
-                <label>총결제액 (자동 합산)</label>
-                <input type="text" id="inq-total-payment" readonly disabled value="0원" style="background:var(--color-bg-2); font-weight:600;">
+                <label>총결제액 (원, 자동 합산 / 직접 수정 가능)</label>
+                <input type="number" id="inq-total-payment" name="total_payment" value="0" min="0" placeholder="현금+카드 자동합산. 할인 등 직접 수정 가능">
               </div>
             </div>
           </div>
@@ -511,6 +515,7 @@ const InquiryTab = (() => {
           const regToggle = el.querySelector('#inq-is-registered');
           const regSection = el.querySelector('#inq-reg-section');
           const productContainer = el.querySelector('#dd-inq-reg-product');
+          const regContractContainer = el.querySelector('#dd-inq-reg-contract-manager');
           const regSalesContainer = el.querySelector('#dd-inq-reg-sales-manager');
           let regDropdownsCreated = false;
 
@@ -518,6 +523,7 @@ const InquiryTab = (() => {
             regSection.style.display = regToggle.checked ? '' : 'none';
             if (regToggle.checked && !regDropdownsCreated) {
               Dropdown.create({ container: productContainer, category: '회원권상품', name: 'reg_product', value: '' });
+              Dropdown.create({ container: regContractContainer, category: '매출담당자', name: 'reg_contract_manager', value: '' });
               Dropdown.create({ container: regSalesContainer, category: '매출담당자', name: 'reg_sales_manager', value: '' });
               regDropdownsCreated = true;
             }
@@ -526,13 +532,16 @@ const InquiryTab = (() => {
           const cashInput = el.querySelector('input[name="total_payment_cash"]');
           const cardInput = el.querySelector('input[name="total_payment_card"]');
           const totalEl = el.querySelector('#inq-total-payment');
+          let totalManuallyEdited = false;
           const updateTotal = () => {
+            if (totalManuallyEdited) return;
             const cash = parseInt(cashInput.value) || 0;
             const card = parseInt(cardInput.value) || 0;
-            totalEl.value = (cash + card).toLocaleString() + '원';
+            totalEl.value = cash + card;
           };
           cashInput.addEventListener('input', updateTotal);
           cardInput.addEventListener('input', updateTotal);
+          totalEl.addEventListener('input', () => { totalManuallyEdited = true; });
         }
 
         // 폼 제출
@@ -599,8 +608,9 @@ const InquiryTab = (() => {
         product: regProduct,
         total_payment_cash: parseInt(fd.get('total_payment_cash')) || 0,
         total_payment_card: parseInt(fd.get('total_payment_card')) || 0,
-        contract_manager: fd.get('contract_manager')?.trim() || null,
-        // v7.1: 추가 모드에서는 등록 섹션의 reg_sales_manager 사용
+        total_payment: (() => { const v = fd.get('total_payment'); return v === '' || v == null ? null : (parseInt(v) || 0); })(),
+        // v7.1: 추가 모드에서는 등록 섹션의 reg_contract_manager / reg_sales_manager 사용
+        contract_manager: fd.get('reg_contract_manager')?.trim() || null,
         sales_manager: fd.get('reg_sales_manager')?.trim() || null,
       };
       const { error: regError } = await supabase.from('registrations').insert(regPayload);
@@ -668,8 +678,8 @@ const InquiryTab = (() => {
               <input type="number" name="total_payment_card" value="0" min="0">
             </div>
             <div class="form-group full">
-              <label>총결제액 (자동 합산)</label>
-              <input type="text" id="reg-total-payment" readonly disabled value="0원" style="background:var(--color-bg-2); font-weight:600;">
+              <label>총결제액 (원, 자동 합산 / 직접 수정 가능)</label>
+              <input type="number" id="reg-total-payment" name="total_payment" value="0" min="0" placeholder="현금+카드 자동합산. 할인 등 직접 수정 가능">
             </div>
             <div class="form-group">
               <label>계약직원</label>
@@ -700,17 +710,20 @@ const InquiryTab = (() => {
         Dropdown.create({ container: el.querySelector('#dd-reg-contract-manager'), category: '매출담당자', name: 'contract_manager', value: '' });
         Dropdown.create({ container: el.querySelector('#dd-reg-sales-manager'), category: '매출담당자', name: 'sales_manager', value: '' });
 
-        // v7: 총결제액 자동 합산
+        // v7: 총결제액 자동 합산 (수동 수정 시 자동 합산 중단)
         const cashInput = el.querySelector('input[name="total_payment_cash"]');
         const cardInput = el.querySelector('input[name="total_payment_card"]');
         const totalEl = el.querySelector('#reg-total-payment');
+        let totalManuallyEdited = false;
         const updateTotal = () => {
+          if (totalManuallyEdited) return;
           const cash = parseInt(cashInput.value) || 0;
           const card = parseInt(cardInput.value) || 0;
-          totalEl.value = (cash + card).toLocaleString() + '원';
+          totalEl.value = cash + card;
         };
         cashInput.addEventListener('input', updateTotal);
         cardInput.addEventListener('input', updateTotal);
+        totalEl.addEventListener('input', () => { totalManuallyEdited = true; });
 
         el.querySelector('#registration-form').addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -731,6 +744,7 @@ const InquiryTab = (() => {
       product: fd.get('product')?.trim(),
       total_payment_cash: (() => { const v = fd.get('total_payment_cash'); return v === '' || v == null ? 0 : (parseInt(v) || 0); })(),
       total_payment_card: (() => { const v = fd.get('total_payment_card'); return v === '' || v == null ? 0 : (parseInt(v) || 0); })(),
+      total_payment: (() => { const v = fd.get('total_payment'); return v === '' || v == null ? null : (parseInt(v) || 0); })(),
       contract_manager: fd.get('contract_manager')?.trim() || null,  // v6: 계약직원
       sales_manager: fd.get('sales_manager')?.trim() || null,        // v6: 매출담당직원
       // v25: 빈 값이면 null, '0'이면 0 유지 (의도적 0회 입력 보존)
@@ -767,6 +781,19 @@ const InquiryTab = (() => {
       }
       submitBtn.disabled = false;
       return;
+    }
+
+    // 총결제액이 현금+카드 자동합산과 다르면(사용자가 직접 수정한 경우) 별도 UPDATE로 반영
+    // RPC는 자동합산값으로 세팅하므로, 수동 수정값은 2-step으로 override
+    const autoTotal = payload.total_payment_cash + payload.total_payment_card;
+    if (payload.total_payment !== null && payload.total_payment !== autoTotal) {
+      const { error: updErr } = await supabase
+        .from('registrations')
+        .update({ total_payment: payload.total_payment })
+        .eq('inquiry_id', inquiry.id);
+      if (updErr) {
+        Toast.warning('등록은 완료됐으나 총결제액 수정값 반영 실패: ' + updErr.message);
+      }
     }
 
     Toast.success('회원권 등록 완료');
