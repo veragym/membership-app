@@ -414,9 +414,9 @@ const SptTab = (() => {
          </button>`
       : `<span class="spt-cell-action-placeholder">&nbsp;</span>`;
 
-    // 수정/동기화 버튼 — .btn-action 디자인 토큰 재사용 (inquiry/pt 탭과 동일 패턴)
+    // 수정 버튼 — .btn-action 디자인 토큰 재사용 (inquiry/pt 탭과 동일 패턴)
+    // 동기화 버튼은 상단 툴바에만 유지 (행별 버튼 제거)
     const editBtnHtml = `<button class="btn-action spt-edit-btn" data-member-id="${escHtml(memberId)}" title="수정">수정</button>`;
-    const syncBtnHtml = `<button class="btn-action spt-sync-btn" data-member-id="${escHtml(memberId)}" title="동기화">동기화</button>`;
 
     // 관리자 메모 셀 (담당트레이너 옆) — 클릭 시 전체 내용 펼침 (inquiry 탭 col-content 패턴)
     const memoRaw = (r.master_notes || '').toString();
@@ -442,7 +442,6 @@ const SptTab = (() => {
           </div>
           <div class="spt-row-cell spt-row-actions">
             ${cmtBtnHtml}
-            ${syncBtnHtml}
             ${editBtnHtml}
           </div>
         </div>
@@ -461,10 +460,6 @@ const SptTab = (() => {
     // 수정 버튼 (모달 오픈)
     const editBtn = card.querySelector(`.spt-edit-btn[data-member-id="${CSS.escape(memberId)}"]`);
     if (editBtn) editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(memberId); });
-
-    // 동기화 버튼 — DB 최신 데이터 재조회
-    const syncBtn = card.querySelector(`.spt-sync-btn[data-member-id="${CSS.escape(memberId)}"]`);
-    if (syncBtn) syncBtn.addEventListener('click', async (e) => { e.stopPropagation(); await loadSummaries(); });
 
     // 관리자 메모 셀: 클릭 시 전체 내용 펼침 (inquiry 탭 col-content 패턴과 동일)
     const memoCell = card.querySelector(`.spt-cell-memo[data-member-id="${CSS.escape(memberId)}"]`);
