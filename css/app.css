@@ -800,12 +800,12 @@ html, body {
                 ·등록상품·총결제·계약직원·매출담당·SPT·희망시간 */
   :root {
     --inquiry-cols:
-      60px      /* 문의일 (YY/M/D 축약) */
-      92px      /* 이름 */
-      108px     /* 전화번호 */
-      68px      /* 상태 (미등록 풀표기) */
-      54px      /* 신/재 */
-      60px      /* 상담유형 */
+      52px      /* 문의일 (YY/M/D 축약) */
+      72px      /* 이름 */
+      106px     /* 전화번호 */
+      56px      /* 상태 (미등록 풀표기) */
+      44px      /* 신/재 */
+      52px      /* 상담유형 */
       60px      /* 유입 */
       60px      /* 목적 */
       58px      /* 거주지 */
@@ -816,7 +816,7 @@ html, body {
       62px      /* 계약직원 (v6) */
       62px      /* 매출담당 */
       44px      /* SPT */
-      72px;     /* 희망시간 */
+      132px;    /* 희망시간 (확장 + 클릭 펼치기) */
   }
 
   .inquiry-table-header {
@@ -968,6 +968,45 @@ html, body {
     border-left: 1px dashed var(--color-divider);
     padding-left: 8px;
   }
+  /* 희망시간 — col-content 와 동일한 클릭 펼치기 패턴 */
+  .inquiry-card-main .col-reg-time {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: outline-color 0.1s, background 0.1s;
+  }
+  .inquiry-card-main .col-reg-time .content-preview-inline {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: bottom;
+  }
+  .inquiry-card-main .col-reg-time:hover {
+    outline: 1px solid var(--color-border);
+    outline-offset: -2px;
+    background: var(--color-bg-2);
+  }
+  .inquiry-card-main .col-reg-time.expanded {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    text-align: left;
+    outline: 1px solid var(--color-primary, #B91C1C);
+    outline-offset: -2px;
+    background: var(--color-bg-2);
+    padding: 6px 10px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .inquiry-card-main .col-reg-time.expanded .content-preview-inline {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    display: block;
+    max-width: 100%;
+  }
+
   .inquiry-card-main .col-reg-date { color: var(--color-text-secondary); }
   .inquiry-card-main .col-reg-product { font-weight: 500; }
   .inquiry-card-main .col-reg-payment {

@@ -334,7 +334,10 @@ const InquiryTab = (() => {
     const regContractCell = hasReg ? esc(reg.contract_manager || '-') : '-';
     const regManagerCell  = hasReg ? esc(reg.sales_manager || '-') : '-';
     const regSptCell      = hasReg && reg.spt_count ? `${esc(reg.spt_count)}회` : '-';
-    const regTimeCell     = hasReg ? esc(reg.spt_preferred_time || '-') : '-';
+    const regTimeRaw      = hasReg ? (reg.spt_preferred_time || '') : '';
+    const regTimeCell     = regTimeRaw
+      ? `<span class="content-preview-inline">${esc(regTimeRaw)}</span>`
+      : '-';
 
     row.innerHTML = `
       <div class="col-date" title="${esc(inq.inquiry_date || '')}">${esc(fmtDateShort(inq.inquiry_date))}</div>
@@ -353,7 +356,7 @@ const InquiryTab = (() => {
       <div class="col-reg-contract ${hasReg ? '' : 'is-empty'}">${regContractCell}</div>
       <div class="col-reg-manager ${hasReg ? '' : 'is-empty'}">${regManagerCell}</div>
       <div class="col-reg-spt ${hasReg ? '' : 'is-empty'}">${regSptCell}</div>
-      <div class="col-reg-time ${hasReg ? '' : 'is-empty'}">${regTimeCell}</div>
+      <div class="col-reg-time ${hasReg ? '' : 'is-empty'}"${regTimeRaw ? ` title="${esc(regTimeRaw)}"` : ''}>${regTimeCell}</div>
     `;
 
     if (!isPast) {
@@ -374,6 +377,14 @@ const InquiryTab = (() => {
         // 액션 버튼 등 다른 셀 클릭은 무시
         if (e.target.closest('.col-actions')) return;
         contentCell.classList.toggle('expanded');
+      });
+    }
+
+    // 희망시간 셀 클릭 → 전체 내용 펼치기 토글 (col-content 와 동일 패턴)
+    const regTimeEl = row.querySelector('.col-reg-time');
+    if (regTimeEl && regTimeRaw) {
+      regTimeEl.addEventListener('click', () => {
+        regTimeEl.classList.toggle('expanded');
       });
     }
 
