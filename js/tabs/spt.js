@@ -142,22 +142,25 @@ const SptTab = (() => {
 
   // ─────────────── 진행상태 / 세션날짜 포맷 ───────────────
 
-  // 회원 전체 진행상태 (사용자 규칙):
-  //   - in_progress 1개 이상 → in_progress
-  //   - in_progress 0개 & pending 1개 이상 → pending
-  //   - 모두 종결(completed/rejected/unreachable/other) → completed (=완료)
-  //   - 세션 0건 → pending
+  // 회원 전체 진행상태 — 우선순위 기반
+  // in_progress > managing > pending > registered > completed > rejected > unreachable > other
   function deriveOverallStatus(r) {
     const ip  = Number(r.in_progress_sessions) || 0;
-    const pd  = Number(r.pending_sessions)     || 0;
     const mn  = Number(r.managing_sessions)    || 0;
+    const pd  = Number(r.pending_sessions)     || 0;
     const rg  = Number(r.registered_sessions)  || 0;
-    const tot = Number(r.total_sessions)       || 0;
-    if (ip  > 0) return 'in_progress';
-    if (pd  > 0) return 'pending';
-    if (mn  > 0) return 'managing';
-    if (rg  > 0) return 'registered';
-    if (tot > 0) return 'completed';
+    const cp  = Number(r.completed_sessions)   || 0;
+    const rj  = Number(r.rejected_sessions)    || 0;
+    const un  = Number(r.unreachable_sessions) || 0;
+    const ot  = Number(r.other_sessions)       || 0;
+    if (ip > 0) return 'in_progress';
+    if (mn > 0) return 'managing';
+    if (pd > 0) return 'pending';
+    if (rg > 0) return 'registered';
+    if (cp > 0) return 'completed';
+    if (rj > 0) return 'rejected';
+    if (un > 0) return 'unreachable';
+    if (ot > 0) return 'other';
     return 'pending';
   }
 
