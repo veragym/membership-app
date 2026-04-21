@@ -2813,9 +2813,14 @@ html, body {
 /* ───────── 업무/홍보/센터 관리 탭 ───────── */
 .ops-layout {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 2fr 3fr;
   gap: 16px;
   align-items: start;
+}
+.ops-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .ops-panel {
   background: var(--color-bg-1);
@@ -2899,6 +2904,9 @@ html, body {
 .ops-cal-grid {
   display: grid;
   grid-template-columns: 52px repeat(4, 1fr);
+}
+.ops-cal-grid-2d {
+  grid-template-columns: 52px repeat(2, 1fr);
 }
 .ops-cal-time-col { position: relative; }
 .ops-cal-time-label {
@@ -3112,4 +3120,156 @@ html, body {
   background: var(--color-danger);
   color: #fff;
 }
+
+/* ─── 시간표 공유 버튼 ─── */
+.btn-share-sched {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .12s;
+}
+.btn-share-sched:hover {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.btn-share-sched:disabled { opacity: .6; cursor: wait; }
+
+/* ─── 예약자 리스트 (sessionStorage · 일회성) ─── */
+.resv-table {
+  display: flex;
+  flex-direction: column;
+}
+.resv-head, .resv-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr 2fr 90px 40px;
+  gap: 0;
+  align-items: stretch;
+}
+.resv-head {
+  background: var(--color-bg-2);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+.resv-head > div {
+  padding: 8px 10px;
+  border-right: 1px solid var(--color-border);
+}
+.resv-head > div:last-child { border-right: none; }
+.resv-row {
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-bg-1);
+  transition: background .12s;
+}
+.resv-row:hover { background: var(--color-bg-2); }
+.resv-row-add { background: var(--color-bg-0); }
+.resv-cell {
+  position: relative;
+  padding: 0;
+  border-right: 1px solid var(--color-divider);
+}
+.resv-cell:last-child { border-right: none; }
+.resv-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text-primary);
+  box-sizing: border-box;
+  outline: none;
+}
+.resv-input:focus { background: var(--color-primary-bg); }
+.resv-input::placeholder { color: var(--color-text-muted); }
+
+.resv-status-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-1);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .12s;
+}
+.resv-status-btn.pending {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+  background: #FEF3C7;
+}
+.resv-status-btn.completed {
+  color: #fff;
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+.resv-status-btn:hover { transform: scale(1.03); }
+.resv-status-placeholder { font-size: 13px; color: var(--color-text-muted); }
+
+.resv-del-btn {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-1);
+  color: var(--color-danger);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+.resv-del-btn:hover {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+}
+
+.resv-cap-note {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-2);
+  border-top: 1px solid var(--color-divider);
+}
+
+/* ─── 문의관리 자동완성 드롭다운 ─── */
+.resv-suggest {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.resv-suggest-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-text-muted);
+}
+.resv-suggest-item:last-child { border-bottom: none; }
+.resv-suggest-item:hover { background: var(--color-primary-bg); color: var(--color-text-primary); }
+.resv-suggest-item .s-name { font-weight: 600; color: var(--color-text-secondary); }
+.resv-suggest-item .s-phone { color: var(--color-text-muted); }
+.resv-suggest-item:hover .s-name { color: var(--color-text-primary); }
 
