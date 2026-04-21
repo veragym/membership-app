@@ -205,7 +205,6 @@ const SptTab = (() => {
           ${slotChip('all', '전체')}
           ${slotChip('오전', '오전')}
           ${slotChip('오후', '오후')}
-          ${slotChip('전체', '전체')}
         </div>
         <div class="manager-filter">
           <select class="filter-select" id="spt-filter-trainer">${trainerOpts}</select>
