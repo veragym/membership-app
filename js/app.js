@@ -115,6 +115,9 @@ const App = (() => {
       if (tabId === 'spt' && typeof SptTab !== 'undefined') SptTab.init();
       if (tabId === 'promo' && typeof PromoTab !== 'undefined') PromoTab.init();
       if (tabId === 'settings' && typeof SettingsTab !== 'undefined') SettingsTab.init();
+    } else {
+      // 재진입 시 자동 새로고침 (SPT: 트레이너 앱 변경 반영)
+      if (tabId === 'spt' && typeof SptTab !== 'undefined') SptTab.reload();
     }
   }
 

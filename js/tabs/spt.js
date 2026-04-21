@@ -36,14 +36,28 @@ const SptTab = (() => {
   };
 
   // ─────────────── 초기화 ───────────────
+  let _realtimeChannel = null;
+
   async function init() {
     await loadTrainers();
     renderToolbar();
     await loadSummaries();
+    subscribeRealtime();
   }
 
   async function reload() {
     await loadSummaries();
+  }
+
+  // Supabase Realtime 구독 — 트레이너 앱이 spt_sessions/comments/members 변경 시 즉시 반영
+  function subscribeRealtime() {
+    if (_realtimeChannel) return;
+    const debouncedReload = debounce(() => { loadSummaries(); }, 400);
+    _realtimeChannel = supabase.channel('spt-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_sessions' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_member_comments' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_members' }, debouncedReload)
+      .subscribe();
   }
 
   async function loadTrainers() {
