@@ -82,7 +82,7 @@ const PromoTab = (() => {
           </div>
         </div>
         <div class="ops-right-col">
-          <div class="ops-panel">
+          <div class="ops-panel ops-panel-resv">
             <div class="ops-panel-header">
               <span class="ops-panel-title">예약자 리스트</span>
               <span style="font-size:11px;color:var(--color-text-muted)">일회성 · 최대 10개 · 새로고침 후에도 창 닫기 전까지 유지</span>
@@ -115,6 +115,17 @@ const PromoTab = (() => {
   }
   function timeToY(hh, mm) { return ((hh - CAL_START_H) + mm/60) * CAL_SLOT_PX; }
   function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // 한국 휴대전화 포맷: 입력값에서 숫자만 추출해 010-XXXX-XXXX / 0XX-XXX-XXXX 로 변환
+  function formatPhone(input) {
+    const d = String(input || '').replace(/[^0-9]/g, '');
+    if (!d) return '';
+    if (d.length <= 3) return d;
+    if (d.length <= 7) return `${d.slice(0,3)}-${d.slice(3)}`;
+    if (d.length === 10) return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+    // 11자리 또는 그 이상은 010-XXXX-XXXX 형태 (뒷자리 초과시 잘라냄)
+    return `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7,11)}`;
+  }
 
   async function loadScheduleView() {
     const dates = getCalDates();
@@ -220,45 +231,49 @@ const PromoTab = (() => {
   }
 
   // ═══ 시간표 이미지 공유 ═══
+  // 이미지 구성:
+  //   ┌────────────┬───────────┐
+  //   │ 통계 정보  │ 금일 일정 │
+  //   ├────────────┴───────────┤
+  //   │      예약자 리스트      │
+  //   └────────────────────────┘
   async function shareScheduleImage() {
     if (typeof html2canvas === 'undefined') {
       Toast.error('이미지 라이브러리 로드 실패 — 새로고침 후 재시도해주세요.');
       return;
     }
-    const wrap = document.getElementById('opsCalWrap');
-    if (!wrap) return;
     const btn = document.getElementById('btnShareSched');
     const orig = btn.textContent;
     btn.disabled = true; btn.textContent = '생성 중…';
     try {
-      // ── 캡처용 임시 컨테이너: 헤더 + 스케줄 본문 ──
-      const dates = getCalDates();
-      const dateLabel = dates.map(d => `${d.getMonth()+1}/${d.getDate()}(${DAY_KO[d.getDay()]})`).join(' · ');
-      const totalPx = (CAL_END_H - CAL_START_H + 1) * CAL_SLOT_PX;
+      const today = new Date();
+      const todayYMD = toYMD(today);
+      const stats = await fetchStatsForShare(today);
+
       const exportEl = document.createElement('div');
-      exportEl.style.cssText = `position:fixed;left:-10000px;top:0;background:#fff;padding:24px;width:880px;font-family:'Pretendard Variable',sans-serif;`;
+      exportEl.style.cssText =
+        `position:fixed;left:-10000px;top:0;background:#fff;padding:24px;width:1100px;` +
+        `font-family:'Pretendard Variable','Pretendard',sans-serif;color:#111;box-sizing:border-box;`;
       exportEl.innerHTML = `
-        <div style="text-align:center;margin-bottom:14px;">
-          <div style="font-size:20px;font-weight:700;color:#111">베라짐 상담 업무 시간표</div>
-          <div style="font-size:12px;color:#666;margin-top:4px">${dateLabel} · 상담팀</div>
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="font-size:22px;font-weight:800">베라짐 상담 업무 브리프</div>
+          <div style="font-size:12px;color:#666;margin-top:4px">
+            ${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일 (${DAY_KO[today.getDay()]}) · 상담팀
+          </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:stretch">
+          <div>${buildShareStatsHTML(stats, today)}</div>
+          <div>${buildShareCalendarHTML(todayYMD, today)}</div>
+        </div>
+        <div>${buildShareReservationsHTML()}</div>
       `;
-      const clone = wrap.cloneNode(true);
-      // 스크롤 영역을 전체 높이로 펼침
-      const scroll = clone.querySelector('.ops-cal-grid-scroll');
-      if (scroll) { scroll.style.maxHeight = 'none'; scroll.style.overflow = 'visible'; scroll.style.height = (totalPx + 40) + 'px'; }
-      // click-zone / now-line 은 캡처에서 제거
-      clone.querySelectorAll('.ops-cal-click-zone, .ops-cal-now-line').forEach(n => n.remove());
-      exportEl.appendChild(clone);
       document.body.appendChild(exportEl);
 
       const canvas = await html2canvas(exportEl, { backgroundColor: '#ffffff', scale: 2, logging: false, useCORS: true });
       document.body.removeChild(exportEl);
 
-      const ymd = toYMD(new Date());
-      const filename = `베라짐_상담업무시간표_${ymd}.png`;
+      const filename = `베라짐_상담업무_${todayYMD}.png`;
 
-      // ── 클립보드 복사 시도 (있으면 즉시 카카오톡 붙여넣기 가능) ──
       let copied = false;
       try {
         if (navigator.clipboard && window.ClipboardItem) {
@@ -268,7 +283,6 @@ const PromoTab = (() => {
         }
       } catch (_) { /* fallback to download */ }
 
-      // ── 다운로드도 함께 (파일로도 남김) ──
       const link = document.createElement('a');
       link.download = filename;
       link.href = canvas.toDataURL('image/png');
@@ -282,6 +296,204 @@ const PromoTab = (() => {
     } finally {
       btn.disabled = false; btn.textContent = orig;
     }
+  }
+
+  // ─── 공유 이미지용 통계 산출 (stats 탭 로직 포팅) ───
+  async function fetchStatsForShare(today) {
+    const y = today.getFullYear(), m = today.getMonth() + 1;
+    const monthStart = `${y}-${String(m).padStart(2,'0')}-01`;
+    const todayYMD = toYMD(today);
+
+    // 제외 상품: stats 탭과 동일 localStorage 키 사용
+    let excluded = new Set(['1일', '쿠폰']);
+    try {
+      const saved = localStorage.getItem('stats.fc_excluded_products');
+      if (saved) excluded = new Set(JSON.parse(saved));
+    } catch (_) {}
+
+    const fetchRev = async (fromD, toD) => {
+      const { data: fcData } = await supabase.from('registrations')
+        .select('product, total_payment')
+        .gte('registered_date', fromD).lte('registered_date', toD);
+      const fcFiltered = (fcData || []).filter(r => !excluded.has(r.product));
+      const fc = Math.round(fcFiltered.reduce((s, r) => s + (r.total_payment || 0), 0) / 1.1);
+      const { data: ptData } = await supabase.from('pt_registrations')
+        .select('contract_amount')
+        .gte('contract_date', fromD).lte('contract_date', toD);
+      const pt = (ptData || []).reduce((s, r) => s + (r.contract_amount || 0), 0);
+      return { fc, pt };
+    };
+
+    // 주차 정보 계산 (stats.js computeWeekInfo 규칙과 동일: v8 — 1주=월1일, 2주~ 월요일, 월경계 미교차)
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay  = new Date(y, m, 0);
+    const weeks = [new Date(firstDay)];
+    const dow = firstDay.getDay();
+    const daysToMon = dow === 0 ? 1 : (8 - dow);
+    const nextMon = new Date(firstDay);
+    nextMon.setDate(nextMon.getDate() + daysToMon);
+    for (let d = new Date(nextMon); d <= lastDay; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
+    let idx = 0;
+    for (let i = 0; i < weeks.length; i++) { if (today >= weeks[i]) idx = i; else break; }
+    const wkStart = weeks[idx];
+    const wkNext = weeks[idx + 1];
+    const wkEnd = wkNext
+      ? new Date(wkNext.getFullYear(), wkNext.getMonth(), wkNext.getDate() - 1)
+      : new Date(lastDay);
+    const weekStartYMD = toYMD(wkStart), weekEndYMD = toYMD(wkEnd);
+    const weekNumber = idx + 1;
+
+    const [monthRev, todayRev, weekRev, targets] = await Promise.all([
+      fetchRev(monthStart, todayYMD),
+      fetchRev(todayYMD, todayYMD),
+      fetchRev(weekStartYMD, weekEndYMD),
+      (async () => {
+        const { data } = await supabase.from('revenue_targets')
+          .select('target_type, target_amount').eq('target_week', weekStartYMD);
+        const out = { FC: 0, PT: 0 };
+        (data || []).forEach(r => { out[r.target_type] = r.target_amount; });
+        return out;
+      })(),
+    ]);
+
+    return { monthRev, todayRev, weekRev, targets, weekNumber };
+  }
+
+  function buildShareStatsHTML(stats, today) {
+    const { monthRev, todayRev, weekRev, targets, weekNumber } = stats;
+    const fmt = n => (n || 0).toLocaleString() + '원';
+    const total = monthRev.fc + monthRev.pt;
+    const todayTotal = todayRev.fc + todayRev.pt;
+    const fcTarget = targets.FC || 0, ptTarget = targets.PT || 0;
+    const fcRemain = fcTarget - weekRev.fc;
+    const ptRemain = ptTarget - weekRev.pt;
+    const totTarget = fcTarget + ptTarget;
+    const totRemain = fcRemain + ptRemain;
+    const remainTxt = (v) => {
+      if (v > 0)  return { t: `-${fmt(v)}`,  c: '#EF4444' };
+      if (v < 0)  return { t: `+${fmt(-v)}`, c: '#3B82F6' };
+      return { t: fmt(0), c: '#3B82F6' };
+    };
+    const fcR = remainTxt(fcRemain), ptR = remainTxt(ptRemain), totR = remainTxt(totRemain);
+    const m = today.getMonth() + 1;
+
+    const rowCSS = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #E5E7EB;font-size:13px';
+    const rowTodayCSS = rowCSS + ';color:#6B7280;font-size:12px;padding:4px 0 4px 12px;border-bottom:none';
+    return `
+      <div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:18px;height:100%;box-sizing:border-box">
+        <div style="font-size:15px;font-weight:700;margin-bottom:10px">${m}월 당월 매출</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div style="background:#F9FAFB;border-radius:10px;padding:12px">
+            <div style="font-size:11px;color:#6B7280">금일 매출</div>
+            <div style="font-size:18px;font-weight:800;margin-top:4px">${fmt(todayTotal)}</div>
+          </div>
+          <div style="background:#FEF3C7;border-radius:10px;padding:12px">
+            <div style="font-size:11px;color:#92400E">당월 매출</div>
+            <div style="font-size:18px;font-weight:800;margin-top:4px;color:#92400E">${fmt(total)}</div>
+          </div>
+        </div>
+        <div style="${rowCSS}"><span>FC 총 매출 (부가세 제외)</span><b>${fmt(monthRev.fc)}</b></div>
+        <div style="${rowTodayCSS}"><span>FC 금일 매출</span><b>${fmt(todayRev.fc)}</b></div>
+        <div style="${rowCSS}"><span>PT 매출 (계약금액)</span><b>${fmt(monthRev.pt)}</b></div>
+        <div style="${rowTodayCSS}"><span>PT 금일 매출</span><b>${fmt(todayRev.pt)}</b></div>
+        <div style="margin-top:12px;padding:6px 10px;background:#EEF2FF;color:#4338CA;border-radius:6px;font-size:12px;font-weight:700;text-align:center">
+          ${weekNumber}주차 목표 매출
+        </div>
+        <div style="${rowCSS}"><span>FC 목표 매출</span><b>${fmt(fcTarget)}</b></div>
+        <div style="${rowCSS}"><span>FC 남은 매출</span><b style="color:${fcR.c}">${fcR.t}</b></div>
+        <div style="${rowCSS}"><span>PT 목표 매출</span><b>${fmt(ptTarget)}</b></div>
+        <div style="${rowCSS}"><span>PT 남은 매출</span><b style="color:${ptR.c}">${ptR.t}</b></div>
+        <div style="${rowCSS};border-bottom:none;font-weight:700"><span>총 목표 매출</span><b>${fmt(totTarget)}</b></div>
+        <div style="${rowCSS};border-bottom:none;font-weight:700"><span>총 남은 매출</span><b style="color:${totR.c}">${totR.t}</b></div>
+      </div>
+    `;
+  }
+
+  function buildShareCalendarHTML(todayYMD, today) {
+    const SLOT_PX = 32;
+    const totalPx = (CAL_END_H - CAL_START_H + 1) * SLOT_PX;
+    // 시간 라벨 열
+    let timeCol = `<div style="position:relative;width:58px;flex:none;border-right:1px solid #E5E7EB;height:${totalPx}px">`;
+    for (let h = CAL_START_H; h <= CAL_END_H; h++) {
+      const y = (h - CAL_START_H) * SLOT_PX;
+      const lbl = h < 12 ? `오전 ${h}시` : h === 12 ? `오후 12시` : `오후 ${h-12}시`;
+      const transform = h === CAL_START_H ? 'translateY(2px)' : 'translateY(-50%)';
+      timeCol += `<div style="position:absolute;top:${y}px;right:6px;transform:${transform};font-size:10px;color:#6B7280;white-space:nowrap">${lbl}</div>`;
+    }
+    timeCol += `</div>`;
+
+    // 날짜 열 (오늘만)
+    let dayCol = `<div style="position:relative;flex:1;height:${totalPx}px">`;
+    for (let h = CAL_START_H; h <= CAL_END_H; h++) {
+      const y0 = (h - CAL_START_H) * SLOT_PX;
+      const y30 = y0 + SLOT_PX / 2;
+      dayCol += `<div style="position:absolute;left:0;right:0;top:${y0}px;border-top:1px solid #E5E7EB"></div>`;
+      dayCol += `<div style="position:absolute;left:0;right:0;top:${y30}px;border-top:1px dashed #F3F4F6"></div>`;
+    }
+    dayCol += `<div style="position:absolute;left:0;right:0;top:${totalPx}px;border-top:1px solid #E5E7EB"></div>`;
+
+    scheduleData.filter(s => s.sched_date === todayYMD).forEach(s => {
+      const [sh, sm] = s.start_time.split(':').map(Number);
+      let eh, em;
+      if (s.end_time) { [eh, em] = s.end_time.split(':').map(Number); } else { eh = sh + 1; em = sm; }
+      const top = ((sh - CAL_START_H) + sm/60) * SLOT_PX;
+      const dur = (eh - sh) + (em - sm)/60;
+      const height = Math.max(dur * SLOT_PX, 18);
+      const sType = s.type || '업무';
+      const bg = s.color || TYPE_COLORS[sType] || TYPE_COLORS['업무'];
+      const title = s.title || sType;
+      dayCol += `<div style="position:absolute;left:4px;right:4px;top:${top}px;height:${height}px;background:${bg};color:#fff;border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;overflow:hidden;box-sizing:border-box">
+        <div>${esc(title)}</div>
+        ${s.notes ? `<div style="font-size:10px;opacity:.9;margin-top:1px">${esc(s.notes)}</div>` : ''}
+      </div>`;
+    });
+    dayCol += `</div>`;
+
+    return `
+      <div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:14px;height:100%;box-sizing:border-box;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:15px;font-weight:700">금일 일정표</div>
+          <div style="font-size:11px;color:#6B7280">${today.getMonth()+1}/${today.getDate()} (${DAY_KO[today.getDay()]})</div>
+        </div>
+        <div style="display:flex;flex:1;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden">
+          ${timeCol}
+          ${dayCol}
+        </div>
+      </div>
+    `;
+  }
+
+  function buildShareReservationsHTML() {
+    const rows = reservations.length
+      ? reservations.map((r, i) => {
+          const status = r.status || 'pending';
+          const statusStyle = status === 'completed'
+            ? 'background:#D1FAE5;color:#065F46'
+            : 'background:#FEF3C7;color:#92400E';
+          const statusLabel = status === 'completed' ? '상담완료' : '미완료';
+          return `
+            <div style="display:grid;grid-template-columns:32px 1.2fr 1.4fr 2fr 90px;gap:8px;padding:8px 10px;border-bottom:1px solid #F3F4F6;font-size:12px;align-items:center">
+              <div style="color:#9CA3AF;text-align:center">${i+1}</div>
+              <div style="font-weight:600">${esc(r.name || '-')}</div>
+              <div style="color:#4B5563">${esc(r.phone || '-')}</div>
+              <div style="color:#374151">${esc(r.content || '-')}</div>
+              <div style="text-align:center"><span style="${statusStyle};padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">${statusLabel}</span></div>
+            </div>
+          `;
+        }).join('')
+      : `<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px">등록된 예약자가 없습니다.</div>`;
+    return `
+      <div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#F9FAFB;border-bottom:1px solid #E5E7EB">
+          <div style="font-size:15px;font-weight:700">예약자 리스트</div>
+          <div style="font-size:11px;color:#6B7280">총 ${reservations.length}건</div>
+        </div>
+        <div style="display:grid;grid-template-columns:32px 1.2fr 1.4fr 2fr 90px;gap:8px;padding:8px 10px;background:#F3F4F6;font-size:11px;color:#6B7280;font-weight:600">
+          <div style="text-align:center">#</div><div>이름</div><div>연락처</div><div>내용</div><div style="text-align:center">상태</div>
+        </div>
+        ${rows}
+      </div>
+    `;
   }
 
   // ═══ 예정 업무 리스트 ═══
@@ -486,14 +698,20 @@ const PromoTab = (() => {
       row.querySelectorAll('.resv-input').forEach(inp => {
         const field = inp.dataset.field;
         inp.addEventListener('input', () => {
-          if (isAdd) {
-            // 빈 행에서 입력 시작 → 첫 입력이 저장될 때까지 대기 (blur 또는 Enter 시 저장)
-            if (field === 'name' || field === 'phone') triggerSuggest(row, field, inp.value);
-          } else {
+          // 전화번호 자동 포맷
+          if (field === 'phone') {
+            const caretAtEnd = inp.selectionStart === inp.value.length;
+            const formatted = formatPhone(inp.value);
+            if (formatted !== inp.value) {
+              inp.value = formatted;
+              if (caretAtEnd) inp.setSelectionRange(formatted.length, formatted.length);
+            }
+          }
+          if (!isAdd) {
             reservations[idx][field] = inp.value;
             saveReservations();
-            if (field === 'name' || field === 'phone') triggerSuggest(row, field, inp.value);
           }
+          if (field === 'name' || field === 'phone') triggerSuggest(row, field, inp.value);
         });
         inp.addEventListener('blur', () => {
           setTimeout(() => closeSuggest(row, field), 150);
@@ -527,7 +745,7 @@ const PromoTab = (() => {
 
   function commitAddRow(row) {
     const name = row.querySelector('[data-field="name"]').value.trim();
-    const phone = row.querySelector('[data-field="phone"]').value.trim();
+    const phone = formatPhone(row.querySelector('[data-field="phone"]').value);
     const content = row.querySelector('[data-field="content"]').value.trim();
     if (!name && !phone && !content) return; // 빈 행 무시
     if (reservations.length >= RESV_MAX) return;
@@ -578,7 +796,8 @@ const PromoTab = (() => {
     box.querySelectorAll('.resv-suggest-item').forEach(it => {
       it.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        const name = it.dataset.name, phone = it.dataset.phone;
+        const name = it.dataset.name;
+        const phone = formatPhone(it.dataset.phone);
         row.querySelector('[data-field="name"]').value = name;
         row.querySelector('[data-field="phone"]').value = phone;
         box.style.display = 'none';

@@ -2813,7 +2813,7 @@ html, body {
 /* ───────── 업무/홍보/센터 관리 탭 ───────── */
 .ops-layout {
   display: grid;
-  grid-template-columns: 2fr 3fr;
+  grid-template-columns: 1fr 2fr;
   gap: 16px;
   align-items: start;
 }
@@ -2826,8 +2826,8 @@ html, body {
   background: var(--color-bg-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
 }
+.ops-panel-resv { overflow: visible; }
 .ops-panel-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--color-border);
@@ -2880,15 +2880,16 @@ html, body {
   text-transform: uppercase;
 }
 .ops-cal-dhdr-num {
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--color-text-primary);
   display: inline-block;
-  width: 34px;
-  height: 34px;
-  line-height: 34px;
+  min-width: 34px;
+  height: 30px;
+  line-height: 30px;
+  padding: 0 10px;
   text-align: center;
-  border-radius: 50%;
+  border-radius: 999px;
 }
 .ops-cal-day-hdr.today .ops-cal-dhdr-num {
   color: var(--color-text-on-primary);
