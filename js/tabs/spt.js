@@ -164,12 +164,40 @@ const SptTab = (() => {
     return `spt-cell-session spt-cell-${s.status.replace('_','-')}`;
   }
 
-  // ─────────────── 툴바 (검색 + 신규 + 초기화만 — 필터는 컬럼 위 행으로 이관) ───────────────
+  // ─────────────── 툴바 (inquiry탭 디자인 규칙 동일: search + pills + dropdown + actions) ───────────────
   function renderToolbar() {
     const pane = document.getElementById('tab-spt');
+
+    const slotChip = (val, label) =>
+      `<button class="btn btn-chip${filter.slot === val ? ' active' : ''}" data-spt-slot="${escHtml(val)}">${escHtml(label)}</button>`;
+
+    const trainerOpts = [
+      `<option value=""${filter.trainerId === '' ? ' selected' : ''}>트레이너 전체</option>`,
+      `<option value="__unassigned__"${filter.trainerId === '__unassigned__' ? ' selected' : ''}>미배정</option>`,
+      ...activeTrainers.map(t =>
+        `<option value="${escHtml(t.id)}"${filter.trainerId === t.id ? ' selected' : ''}>${escHtml(t.name)}</option>`)
+    ].join('');
+
+    const stateOpts = [
+      ['all', '상태 전체'], ['pending', '진행전'], ['in_progress', '진행중'],
+      ['completed', '완료'], ['rejected', '거부'], ['unreachable', '연락안됨'], ['other', '기타']
+    ].map(([v, l]) =>
+      `<option value="${v}"${filter.state === v ? ' selected' : ''}>${l}</option>`
+    ).join('');
+
     pane.innerHTML = `
       <div class="inquiry-toolbar spt-toolbar">
         <input type="text" class="search-box" id="spt-search" placeholder="이름 또는 번호 검색...">
+        <div class="status-filter" role="group" aria-label="시간대 필터">
+          ${slotChip('all', '전체')}
+          ${slotChip('오전', '오전')}
+          ${slotChip('오후', '오후')}
+          ${slotChip('전체', '무관')}
+        </div>
+        <div class="manager-filter">
+          <select class="filter-select" id="spt-filter-trainer">${trainerOpts}</select>
+          <select class="filter-select" id="spt-filter-state">${stateOpts}</select>
+        </div>
         <div class="inquiry-toolbar-actions">
           <button class="btn btn-primary btn-chip-sized" id="btn-spt-new">+ SPT 신규</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-spt-reset">초기화</button>
@@ -183,9 +211,34 @@ const SptTab = (() => {
       renderList();
     }, 250));
 
+    pane.querySelector('.status-filter').addEventListener('click', e => {
+      const btn = e.target.closest('[data-spt-slot]');
+      if (!btn) return;
+      filter.slot = btn.dataset.sptSlot;
+      pane.querySelectorAll('.status-filter [data-spt-slot]').forEach(b =>
+        b.classList.toggle('active', b.dataset.sptSlot === filter.slot)
+      );
+      renderList();
+    });
+
+    pane.querySelector('#spt-filter-trainer').addEventListener('change', e => {
+      filter.trainerId = e.target.value;
+      renderList();
+    });
+
+    pane.querySelector('#spt-filter-state').addEventListener('change', e => {
+      filter.state = e.target.value;
+      renderList();
+    });
+
     pane.querySelector('#btn-spt-reset').addEventListener('click', () => {
       filter = { search: '', state: 'all', slot: 'all', trainerId: '' };
       pane.querySelector('#spt-search').value = '';
+      pane.querySelectorAll('.status-filter [data-spt-slot]').forEach(b =>
+        b.classList.toggle('active', b.dataset.sptSlot === 'all')
+      );
+      pane.querySelector('#spt-filter-trainer').value = '';
+      pane.querySelector('#spt-filter-state').value = 'all';
       renderList();
     });
 
@@ -277,65 +330,14 @@ const SptTab = (() => {
       return;
     }
 
-    listEl.innerHTML = `<div class="spt-card-list">${renderFilterRow()}${renderListHeader()}${filtered.map(r => renderCard(r)).join('')}</div>`;
-
-    // 필터 드롭다운 바인딩
-    listEl.querySelectorAll('.spt-filter-select').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const kind = sel.dataset.filter;
-        if (kind === 'slot')         filter.slot = sel.value;
-        else if (kind === 'trainer') filter.trainerId = sel.value;
-        else if (kind === 'state')   filter.state = sel.value;
-        renderList();
-      });
-    });
+    listEl.innerHTML = `<div class="spt-card-list">${renderListHeader()}${filtered.map(r => renderCard(r)).join('')}</div>`;
 
     // 카드 바인딩
     filtered.forEach(r => bindCard(r.member_id));
   }
 
   function renderFilterRow() {
-    const sel = (val, opts) => opts.map(([v, text]) =>
-      `<option value="${escHtml(v)}"${String(val) === String(v) ? ' selected' : ''}>${escHtml(text)}</option>`
-    ).join('');
-
-    const slotOptions = sel(filter.slot, [
-      ['all', '시간 전체'],
-      ['오전', '오전'],
-      ['오후', '오후'],
-      ['전체', '무관']
-    ]);
-
-    const trainerOptions = sel(filter.trainerId, [
-      ['', '트레이너 전체'],
-      ['__unassigned__', '미배정'],
-      ...activeTrainers.map(t => [t.id, t.name])
-    ]);
-
-    const stateOptions = sel(filter.state, [
-      ['all', '상태 전체'],
-      ['pending', '진행전'],
-      ['in_progress', '진행중'],
-      ['completed', '완료'],
-      ['rejected', '거부'],
-      ['unreachable', '연락안됨'],
-      ['other', '기타']
-    ]);
-
-    return `
-      <div class="spt-row-filters">
-        <div></div>
-        <div></div>
-        <div><select class="spt-filter-select" data-filter="slot">${slotOptions}</select></div>
-        <div><select class="spt-filter-select" data-filter="trainer">${trainerOptions}</select></div>
-        <div></div>
-        <div><select class="spt-filter-select" data-filter="state">${stateOptions}</select></div>
-        <div></div>
-        <div></div>
-        <div></div>
-        <div></div>
-      </div>
-    `;
+    return '';
   }
 
   // 9-cell row 카드 HTML
