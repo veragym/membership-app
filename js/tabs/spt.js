@@ -154,6 +154,10 @@ const SptTab = (() => {
       case 'rejected':    return '거부';
       case 'unreachable': return '연락안됨';
       case 'other':       return '기타';
+      case 'managing':
+        return s.scheduled_at ? fmtMonthDay(s.scheduled_at) : '관리중';
+      case 'registered':
+        return s.completed_at ? `${fmtMonthDay(s.completed_at)} 등록` : '등록';
       case 'pending':     return '—';
       default:            return '—';
     }
@@ -180,6 +184,7 @@ const SptTab = (() => {
 
     const stateOpts = [
       ['all', '상태 전체'], ['pending', '진행전'], ['in_progress', '진행중'],
+      ['managing', '관리중'], ['registered', '등록'],
       ['completed', '완료'], ['rejected', '거부'], ['unreachable', '연락안됨'], ['other', '기타']
     ].map(([v, l]) =>
       `<option value="${v}"${filter.state === v ? ' selected' : ''}>${l}</option>`
@@ -247,14 +252,16 @@ const SptTab = (() => {
 
   // ─────────────── 리스트 렌더 ───────────────
 
-  // 현재 상태 배지 우선순위: in_progress > pending > completed > rejected > unreachable > other
+  // 현재 상태 배지 우선순위: in_progress > managing > pending > registered > completed > rejected > unreachable > other
   function deriveCurrentStatus(row) {
     if ((row.in_progress_sessions || 0) > 0) return 'in_progress';
-    if ((row.pending_sessions || 0) > 0)     return 'pending';
-    if ((row.completed_sessions || 0) > 0)   return 'completed';
-    if ((row.rejected_sessions || 0) > 0)    return 'rejected';
+    if ((row.managing_sessions    || 0) > 0) return 'managing';
+    if ((row.pending_sessions     || 0) > 0) return 'pending';
+    if ((row.registered_sessions  || 0) > 0) return 'registered';
+    if ((row.completed_sessions   || 0) > 0) return 'completed';
+    if ((row.rejected_sessions    || 0) > 0) return 'rejected';
     if ((row.unreachable_sessions || 0) > 0) return 'unreachable';
-    if ((row.other_sessions || 0) > 0)       return 'other';
+    if ((row.other_sessions       || 0) > 0) return 'other';
     return 'pending';
   }
 
@@ -264,7 +271,9 @@ const SptTab = (() => {
     completed:   '완료',
     rejected:    '거부',
     unreachable: '연락안됨',
-    other:       '기타'
+    other:       '기타',
+    managing:    '관리중',
+    registered:  '등록',
   };
 
   function statusBadgeHtml(status) {
@@ -297,10 +306,7 @@ const SptTab = (() => {
         if (!inName && !inPhone) return false;
       }
       if (filter.state !== 'all') {
-        const cur = deriveCurrentStatus(r);
-        if (filter.state === 'pending' && cur !== 'pending') return false;
-        if (filter.state === 'in_progress' && cur !== 'in_progress') return false;
-        if (filter.state === 'completed' && cur !== 'completed') return false;
+        if (deriveCurrentStatus(r) !== filter.state) return false;
       }
       if (filter.slot !== 'all') {
         if ((r.preferred_time_slot || '전체') !== filter.slot) return false;
