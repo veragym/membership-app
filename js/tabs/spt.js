@@ -253,8 +253,20 @@ const SptTab = (() => {
       renderList();
     });
 
-    pane.querySelector('#btn-spt-sync').addEventListener('click', async () => {
-      await loadSummaries();
+    pane.querySelector('#btn-spt-sync').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '동기화 중...';
+      try {
+        await loadSummaries();
+        Toast.success('동기화 완료');
+      } catch (err) {
+        Toast.error('동기화 실패');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
     });
 
     pane.querySelector('#btn-spt-new').addEventListener('click', () => openCreateModal());
