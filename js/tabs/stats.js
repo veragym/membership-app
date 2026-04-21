@@ -156,7 +156,13 @@ const StatsTab = (() => {
       `;
     }
 
-    // v3: 주차 목표/남은 섹션 — 남은 매출 = 주차 목표 - 주차 매출 (버그 수정)
+    // v3: 주차 목표/남은 섹션 — 남은 매출 = 주차 목표 - 주차 매출
+    // v4: 남은 매출 signed 표시 — 부족(remain > 0)은 "-금액" 빨강, 초과(remain < 0)은 "+금액" 파랑
+    const fmtRemain = (remain) => {
+      if (remain > 0)  return { text: `-${fmt(remain)}`,  cls: 'neg' };  // 부족 → 빨강
+      if (remain < 0)  return { text: `+${fmt(-remain)}`, cls: 'pos' };  // 초과 → 파랑
+      return { text: fmt(0), cls: 'pos' };                                // 정확히 달성
+    };
     let targetBlock = '';
     if (opts.current) {
       const weekRev = opts.weekRev || { fc: 0, pt: 0 };
@@ -165,14 +171,17 @@ const StatsTab = (() => {
       const ptRemain = ptTarget - weekRev.pt;
       const totalTarget = fcTarget + ptTarget;
       const totalRemain = fcRemain + ptRemain;
+      const fcR = fmtRemain(fcRemain);
+      const ptR = fmtRemain(ptRemain);
+      const totR = fmtRemain(totalRemain);
       targetBlock = `
         <div class="stats-target-divider">${weekInfo.weekNumber}주차 목표 매출</div>
         <div class="stats-target-row"><span>FC 목표 매출</span><b>${fmt(fcTarget)}</b></div>
-        <div class="stats-target-row"><span>FC 남은 매출</span><b class="${fcRemain < 0 ? 'neg' : ''}">${fmt(fcRemain)}</b></div>
+        <div class="stats-target-row"><span>FC 남은 매출</span><b class="${fcR.cls}">${fcR.text}</b></div>
         <div class="stats-target-row"><span>PT 목표 매출</span><b>${fmt(ptTarget)}</b></div>
-        <div class="stats-target-row"><span>PT 남은 매출</span><b class="${ptRemain < 0 ? 'neg' : ''}">${fmt(ptRemain)}</b></div>
+        <div class="stats-target-row"><span>PT 남은 매출</span><b class="${ptR.cls}">${ptR.text}</b></div>
         <div class="stats-target-row stats-target-total"><span>총 목표 매출</span><b>${fmt(totalTarget)}</b></div>
-        <div class="stats-target-row stats-target-total"><span>총 남은 매출</span><b class="${totalRemain < 0 ? 'neg' : ''}">${fmt(totalRemain)}</b></div>
+        <div class="stats-target-row stats-target-total"><span>총 남은 매출</span><b class="${totR.cls}">${totR.text}</b></div>
       `;
     }
 
