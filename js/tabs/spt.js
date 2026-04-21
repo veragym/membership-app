@@ -196,6 +196,7 @@ const SptTab = (() => {
         </div>
         <div class="inquiry-toolbar-actions">
           <button class="btn btn-primary btn-chip-sized" id="btn-spt-new">+ SPT 신규</button>
+          <button class="btn btn-secondary btn-chip-sized" id="btn-spt-sync">동기화</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-spt-reset">초기화</button>
         </div>
       </div>
@@ -236,6 +237,10 @@ const SptTab = (() => {
       pane.querySelector('#spt-filter-trainer').value = '';
       pane.querySelector('#spt-filter-state').value = 'all';
       renderList();
+    });
+
+    pane.querySelector('#btn-spt-sync').addEventListener('click', async () => {
+      await loadSummaries();
     });
 
     pane.querySelector('#btn-spt-new').addEventListener('click', () => openCreateModal());
