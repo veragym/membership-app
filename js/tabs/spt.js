@@ -381,6 +381,10 @@ const SptTab = (() => {
       ? escHtml(r.trainer_name)
       : '<span class="spt-cell-trainer-unassigned">미배정</span>';
     const slot = escHtml(r.preferred_time_slot || '전체');
+    const detail = escHtml(r.preferred_time_detail || '');
+    const slotCellInner = detail
+      ? `<span class="spt-slot-chip">${slot}</span><span class="spt-slot-detail"> (${detail})</span>`
+      : `<span class="spt-slot-chip">${slot}</span>`;
     const isOpen = expandedMembers.has(memberId);
     const isCommentsOpen = expandedComments.has(memberId);
 
@@ -433,7 +437,7 @@ const SptTab = (() => {
           <div class="spt-row-cell spt-cell-regdate">${escHtml(regDate)}</div>
           <div class="spt-row-cell spt-cell-name" title="${escHtml(r.member_name || '')}">${escHtml(r.member_name || '')}</div>
           <div class="spt-row-cell spt-cell-phone">${escHtml(phoneFmt)}</div>
-          <div class="spt-row-cell spt-cell-slot"><span class="spt-slot-chip">${slot}</span></div>
+          <div class="spt-row-cell spt-cell-slot">${slotCellInner}</div>
           <div class="spt-row-cell spt-cell-trainer">${trainerLabel}</div>
           ${memoCellHtml}
           <div class="spt-row-cell spt-cell-overall">${statusBadgeHtml(overall)}</div>
