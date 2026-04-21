@@ -464,8 +464,10 @@ const PromoTab = (() => {
   }
 
   function buildShareReservationsHTML() {
-    const rows = reservations.length
-      ? reservations.map((r, i) => {
+    const todayYMD = toYMD(new Date());
+    const today = reservations.filter(r => (r.resv_date || todayYMD) === todayYMD);
+    const rows = today.length
+      ? today.map((r, i) => {
           const status = r.status || 'pending';
           const statusStyle = status === 'completed'
             ? 'background:#D1FAE5;color:#065F46'
@@ -481,12 +483,12 @@ const PromoTab = (() => {
             </div>
           `;
         }).join('')
-      : `<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px">등록된 예약자가 없습니다.</div>`;
+      : `<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px">금일 예약자가 없습니다.</div>`;
     return `
       <div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#F9FAFB;border-bottom:1px solid #E5E7EB">
-          <div style="font-size:15px;font-weight:700">예약자 리스트</div>
-          <div style="font-size:11px;color:#6B7280">총 ${reservations.length}건</div>
+          <div style="font-size:15px;font-weight:700">금일 예약자 리스트</div>
+          <div style="font-size:11px;color:#6B7280">${todayYMD} · ${today.length}건</div>
         </div>
         <div style="display:grid;grid-template-columns:32px 1.2fr 1.4fr 2fr 90px;gap:8px;padding:8px 10px;background:#F3F4F6;font-size:11px;color:#6B7280;font-weight:600">
           <div style="text-align:center">#</div><div>이름</div><div>연락처</div><div>내용</div><div style="text-align:center">상태</div>
@@ -647,11 +649,11 @@ const PromoTab = (() => {
     if (!body) return;
     const atMax = reservations.length >= RESV_MAX;
     const rows = reservations.map((r, i) => renderResvRow(r, i, false)).join('');
-    const addRow = !atMax ? renderResvRow({ name:'', phone:'', content:'', status:'pending' }, reservations.length, true) : '';
+    const addRow = !atMax ? renderResvRow({ resv_date: toYMD(new Date()), name:'', phone:'', content:'', status:'pending' }, reservations.length, true) : '';
     body.innerHTML = `
       <div class="resv-table">
         <div class="resv-head">
-          <div>이름</div><div>연락처</div><div>내용</div><div style="text-align:center">상태</div><div></div>
+          <div>예약일</div><div>이름</div><div>연락처</div><div>내용</div><div style="text-align:center">상태</div><div></div>
         </div>
         ${rows}
         ${addRow}
@@ -664,8 +666,12 @@ const PromoTab = (() => {
   function renderResvRow(r, idx, isAdd) {
     const status = r.status || 'pending';
     const statusLabel = status === 'completed' ? '상담완료' : '미완료';
+    const dateVal = r.resv_date || toYMD(new Date());
     return `
       <div class="resv-row ${isAdd ? 'resv-row-add' : ''}" data-idx="${idx}">
+        <div class="resv-cell">
+          <input type="date" class="resv-input resv-input-date" data-field="resv_date" value="${esc(dateVal)}">
+        </div>
         <div class="resv-cell">
           <input type="text" class="resv-input" data-field="name" value="${esc(r.name||'')}" placeholder="${isAdd ? '이름 입력' : ''}" autocomplete="off">
           <div class="resv-suggest" data-for="name"></div>
@@ -744,12 +750,13 @@ const PromoTab = (() => {
   }
 
   function commitAddRow(row) {
+    const resv_date = row.querySelector('[data-field="resv_date"]').value || toYMD(new Date());
     const name = row.querySelector('[data-field="name"]').value.trim();
     const phone = formatPhone(row.querySelector('[data-field="phone"]').value);
     const content = row.querySelector('[data-field="content"]').value.trim();
     if (!name && !phone && !content) return; // 빈 행 무시
     if (reservations.length >= RESV_MAX) return;
-    reservations.push({ name, phone, content, status: 'pending' });
+    reservations.push({ resv_date, name, phone, content, status: 'pending' });
     saveReservations();
     renderReservations();
   }
