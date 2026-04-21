@@ -134,12 +134,16 @@ const SptTab = (() => {
   //   - 모두 종결(completed/rejected/unreachable/other) → completed (=완료)
   //   - 세션 0건 → pending
   function deriveOverallStatus(r) {
-    const ip = Number(r.in_progress_sessions) || 0;
-    const pd = Number(r.pending_sessions) || 0;
-    const total = Number(r.total_sessions) || 0;
-    if (ip > 0) return 'in_progress';
-    if (pd > 0) return 'pending';
-    if (total > 0) return 'completed';
+    const ip  = Number(r.in_progress_sessions) || 0;
+    const pd  = Number(r.pending_sessions)     || 0;
+    const mn  = Number(r.managing_sessions)    || 0;
+    const rg  = Number(r.registered_sessions)  || 0;
+    const tot = Number(r.total_sessions)       || 0;
+    if (ip  > 0) return 'in_progress';
+    if (pd  > 0) return 'pending';
+    if (mn  > 0) return 'managing';
+    if (rg  > 0) return 'registered';
+    if (tot > 0) return 'completed';
     return 'pending';
   }
 
@@ -148,7 +152,7 @@ const SptTab = (() => {
     if (!s) return '—';
     switch (s.status) {
       case 'completed':
-        return s.completed_at ? `${fmtMonthDay(s.completed_at)} 완료` : '완료';
+        return s.completed_at ? fmtMonthDay(s.completed_at) : '완료';
       case 'in_progress':
         return s.scheduled_at ? fmtMonthDay(s.scheduled_at) : '진행중';
       case 'rejected':    return '거부';
@@ -157,7 +161,7 @@ const SptTab = (() => {
       case 'managing':
         return s.scheduled_at ? fmtMonthDay(s.scheduled_at) : '관리중';
       case 'registered':
-        return s.completed_at ? `${fmtMonthDay(s.completed_at)} 등록` : '등록';
+        return s.completed_at ? fmtMonthDay(s.completed_at) : '등록';
       case 'pending':     return '—';
       default:            return '—';
     }
@@ -394,9 +398,11 @@ const SptTab = (() => {
       ? `<div class="spt-row-cell spt-cell-memo" data-member-id="${escHtml(memberId)}" title="${escHtml(memoRaw)}"><span class="spt-cell-memo-inline">${escHtml(memoRaw)}</span></div>`
       : `<div class="spt-row-cell spt-cell-memo spt-cell-memo-empty">—</div>`;
 
+    const regDate = r.registered_at ? fmtMonthDay(r.registered_at) : '—';
     return `
       <div class="spt-card${isCommentsOpen ? ' is-comments-open' : ''}" data-member-id="${escHtml(memberId)}">
         <div class="spt-row" data-member-id="${escHtml(memberId)}">
+          <div class="spt-row-cell spt-cell-regdate">${escHtml(regDate)}</div>
           <div class="spt-row-cell spt-cell-name" title="${escHtml(r.member_name || '')}">${escHtml(r.member_name || '')}</div>
           <div class="spt-row-cell spt-cell-phone">${escHtml(phoneFmt)}</div>
           <div class="spt-row-cell spt-cell-slot"><span class="spt-slot-chip">${slot}</span></div>
@@ -446,14 +452,15 @@ const SptTab = (() => {
   function renderListHeader() {
     return `
       <div class="spt-row spt-row-header" aria-hidden="true">
+        <div class="spt-row-cell">배정날짜</div>
         <div class="spt-row-cell">이름</div>
         <div class="spt-row-cell">연락처</div>
         <div class="spt-row-cell">오전/오후</div>
         <div class="spt-row-cell">담당트레이너</div>
         <div class="spt-row-cell">관리자 메모</div>
         <div class="spt-row-cell">진행상태</div>
-        <div class="spt-row-cell">spt1 날짜</div>
-        <div class="spt-row-cell">spt2 날짜</div>
+        <div class="spt-row-cell">SPT1</div>
+        <div class="spt-row-cell">SPT2</div>
         <div class="spt-row-cell">최신 코멘트</div>
         <div class="spt-row-cell">&nbsp;</div>
       </div>

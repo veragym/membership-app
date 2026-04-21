@@ -2302,16 +2302,17 @@ html, body {
 
 :root {
   --spt-cols:
+    46px                    /* 배정날짜 (M/D) */
     54px                    /* 이름 (한글 3자 타이트) */
-    104px                   /* 연락처 (010-XXXX-XXXX 타이트) */
-    60px                    /* 오전/오후 */
-    82px                    /* 담당트레이너 */
-    minmax(100px, 1fr)      /* 관리자 메모 */
-    64px                    /* 진행상태 */
-    68px                    /* spt1 날짜 */
-    68px                    /* spt2 날짜 */
-    minmax(220px, 2.4fr)    /* 최신 코멘트 — 여유 확대 */
-    180px;                  /* 액션 — +코멘트 N건 ▼ / 수정 두 버튼 안 짤리게 */
+    100px                   /* 연락처 (010-XXXX-XXXX 타이트) */
+    52px                    /* 오전/오후 */
+    76px                    /* 담당트레이너 */
+    minmax(80px, 1fr)       /* 관리자 메모 */
+    60px                    /* 진행상태 */
+    52px                    /* spt1 */
+    52px                    /* spt2 */
+    minmax(180px, 2fr)      /* 최신 코멘트 */
+    130px;                  /* 액션 */
 }
 
 /* 카드 리스트 컨테이너 */
@@ -2387,9 +2388,9 @@ html, body {
 .spt-row {
   display: grid;
   grid-template-columns: var(--spt-cols);
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 10px;
   font-size: 13px;
 }
 .spt-row-cell {
@@ -2411,14 +2412,17 @@ html, body {
 /* 셀별 typography — inquiry 규칙 따름 (name 12px normal, phone/secondary, etc) */
 .spt-cell-name    { font-size: 12px; font-weight: 400; }
 .spt-cell-phone   { color: var(--color-text-secondary); font-size: 12px; font-feature-settings: "tnum"; }
+.spt-cell-regdate { font-size: 12px; color: var(--color-text-muted); }
 .spt-cell-trainer { font-size: 12px; color: var(--color-text-primary); }
 
 /* 최신 코멘트 행 컨텐츠 (M/D 트레이너 : 내용) */
+.spt-row-comment { align-items: flex-start; }
 .spt-row-comment-text {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 .spt-cell-cmt-date   { color: var(--color-text-muted); font-weight: 600; margin-right: 4px; }
 .spt-cell-cmt-author { color: var(--color-text-primary); font-weight: 600; margin-right: 2px; }
@@ -2467,12 +2471,12 @@ html, body {
 }
 .spt-cell-memo-empty { color: var(--color-text-muted); cursor: default; }
 
-/* 액션 영역 — 중앙 정렬, inquiry 의 .col-actions .btn-action 과 동일 높이 */
+/* 액션 영역 — 우측 정렬, inquiry 의 .col-actions .btn-action 과 동일 높이 */
 .spt-row-actions {
   display: flex;
   gap: 6px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   flex-shrink: 0;
 }
 .spt-row-actions .btn-action {
