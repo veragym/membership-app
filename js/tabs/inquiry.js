@@ -430,6 +430,18 @@ const InquiryTab = (() => {
             <div class="form-group">
               <label>매출담당직원</label>
               <div id="dd-inq-sales-manager"></div>
+            </div>
+            <div class="form-group">
+              <label>현금/계좌</label>
+              <input type="number" name="total_payment_cash" value="${existing?.registration?.total_payment_cash ?? 0}" min="0">
+            </div>
+            <div class="form-group">
+              <label>카드</label>
+              <input type="number" name="total_payment_card" value="${existing?.registration?.total_payment_card ?? 0}" min="0">
+            </div>
+            <div class="form-group full">
+              <label>총결제액 (원, 자동 합산 / 직접 수정 가능)</label>
+              <input type="number" id="inq-edit-total-payment" name="total_payment" value="${existing?.registration?.total_payment ?? ((existing?.registration?.total_payment_cash ?? 0) + (existing?.registration?.total_payment_card ?? 0))}" min="0">
             </div>` : ''}
             <!-- v25: 미등록자 수정 모드에선 담당자 필드 숨김 (입력해도 저장 불가였던 유실 이슈 해결). 등록 시 [+등록] 모달에서 입력. -->
             <div class="form-group full">
@@ -508,6 +520,23 @@ const InquiryTab = (() => {
         if (isEdit && existing?.status === 'registered') {
           Dropdown.create({ container: el.querySelector('#dd-inq-contract-manager'), category: '매출담당자', name: 'contract_manager', value: existing?.registration?.contract_manager || '' });
           Dropdown.create({ container: el.querySelector('#dd-inq-sales-manager'), category: '매출담당자', name: 'sales_manager', value: existing?.registration?.sales_manager || '' });
+
+          // 결제액 자동 합산 (수동 수정 시 중단) — 기존 total_payment 값이 cash+card와 다르면 이미 수동 수정된 것으로 간주
+          const editCashInput = el.querySelector('input[name="total_payment_cash"]');
+          const editCardInput = el.querySelector('input[name="total_payment_card"]');
+          const editTotalEl = el.querySelector('#inq-edit-total-payment');
+          const existingTotal = existing?.registration?.total_payment;
+          const existingSum = (existing?.registration?.total_payment_cash ?? 0) + (existing?.registration?.total_payment_card ?? 0);
+          let editTotalManuallyEdited = existingTotal != null && existingTotal !== existingSum;
+          const editUpdateTotal = () => {
+            if (editTotalManuallyEdited) return;
+            const cash = parseInt(editCashInput.value) || 0;
+            const card = parseInt(editCardInput.value) || 0;
+            editTotalEl.value = cash + card;
+          };
+          editCashInput.addEventListener('input', editUpdateTotal);
+          editCardInput.addEventListener('input', editUpdateTotal);
+          editTotalEl.addEventListener('input', () => { editTotalManuallyEdited = true; });
         }
 
         // v7: 신규 문의일 때만 등록 토글 + 결제 섹션 (매출담당도 여기에 포함)
@@ -626,21 +655,38 @@ const InquiryTab = (() => {
       return;
     }
 
-    // v6.1: 등록 상태 + 기존 registration 존재하면 담당자 필드 함께 UPDATE
+    // v6.1 / 수정+등록자 모드: 담당자 + 결제액 필드 함께 UPDATE
     const contractManager = fd.get('contract_manager')?.trim() || null;
     const salesManager = fd.get('sales_manager')?.trim() || null;
-    const hasManagerInput = contractManager || salesManager;
 
-    if (existing && existing.status === 'registered' && existing.registration && hasManagerInput) {
+    if (existing && existing.status === 'registered' && existing.registration) {
       const regUpdate = {};
       if (contractManager !== null) regUpdate.contract_manager = contractManager;
       if (salesManager !== null) regUpdate.sales_manager = salesManager;
-      const { error: regErr } = await supabase
-        .from('registrations')
-        .update(regUpdate)
-        .eq('inquiry_id', existing.id);
-      if (regErr) {
-        Toast.warning('문의는 저장됐지만 담당자 갱신 실패: ' + regErr.message);
+
+      // 결제액 3필드 — 수정 모달에 존재할 때만 form에서 읽힘 (fd.has로 확인)
+      if (fd.has('total_payment_cash')) {
+        const cashVal = parseInt(fd.get('total_payment_cash'));
+        if (Number.isFinite(cashVal)) regUpdate.total_payment_cash = cashVal;
+      }
+      if (fd.has('total_payment_card')) {
+        const cardVal = parseInt(fd.get('total_payment_card'));
+        if (Number.isFinite(cardVal)) regUpdate.total_payment_card = cardVal;
+      }
+      if (fd.has('total_payment')) {
+        const v = fd.get('total_payment');
+        const totalVal = (v === '' || v == null) ? null : (parseInt(v) || 0);
+        if (totalVal !== null) regUpdate.total_payment = totalVal;
+      }
+
+      if (Object.keys(regUpdate).length > 0) {
+        const { error: regErr } = await supabase
+          .from('registrations')
+          .update(regUpdate)
+          .eq('inquiry_id', existing.id);
+        if (regErr) {
+          Toast.warning('문의는 저장됐지만 등록 정보 갱신 실패: ' + regErr.message);
+        }
       }
     }
     // v25: 미등록자 수정 모드에선 담당자 필드가 UI에서 제거됨 → Toast.info 분기 불필요
