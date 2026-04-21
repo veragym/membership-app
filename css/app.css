@@ -2293,7 +2293,7 @@ html, body {
 .spt-status-unreachable  { background: #FEE2E2; color: #991B1B; }
 .spt-status-other        { background: #FEF3C7; color: #92400E; }
 .spt-status-managing     { background: #EDE9FE; color: #5B21B6; }
-.spt-status-registered   { background: #DCFCE7; color: #166534; }
+.spt-status-registered   { background: #DBEAFE; color: #1D4ED8; }
 
 /* ═══════════════════════════════════════════════════════════
    SPT 탭 — 문의관리(.inquiry-table-header / .inquiry-card-main)

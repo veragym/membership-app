@@ -147,24 +147,11 @@ const SptTab = (() => {
     return 'pending';
   }
 
-  // 세션 셀 라벨 (spt1/spt2 열 렌더용)
+  // 세션 셀 라벨 (SPT1/SPT2 열 — 무조건 날짜만)
   function sessionCellLabel(s) {
     if (!s) return '—';
-    switch (s.status) {
-      case 'completed':
-        return s.completed_at ? fmtMonthDay(s.completed_at) : '완료';
-      case 'in_progress':
-        return s.scheduled_at ? fmtMonthDay(s.scheduled_at) : '진행중';
-      case 'rejected':    return '거부';
-      case 'unreachable': return '연락안됨';
-      case 'other':       return '기타';
-      case 'managing':
-        return s.scheduled_at ? fmtMonthDay(s.scheduled_at) : '관리중';
-      case 'registered':
-        return s.completed_at ? fmtMonthDay(s.completed_at) : '등록';
-      case 'pending':     return '—';
-      default:            return '—';
-    }
+    const dt = s.scheduled_at || s.completed_at;
+    return dt ? fmtMonthDay(dt) : '—';
   }
   // 세션 셀 status → CSS 변종(pending 은 muted)
   function sessionCellClass(s) {
@@ -452,11 +439,11 @@ const SptTab = (() => {
   function renderListHeader() {
     return `
       <div class="spt-row spt-row-header" aria-hidden="true">
-        <div class="spt-row-cell">배정날짜</div>
+        <div class="spt-row-cell">날짜</div>
         <div class="spt-row-cell">이름</div>
         <div class="spt-row-cell">연락처</div>
-        <div class="spt-row-cell">오전/오후</div>
-        <div class="spt-row-cell">담당트레이너</div>
+        <div class="spt-row-cell">시간대</div>
+        <div class="spt-row-cell">담당T</div>
         <div class="spt-row-cell">관리자 메모</div>
         <div class="spt-row-cell">진행상태</div>
         <div class="spt-row-cell">SPT1</div>
