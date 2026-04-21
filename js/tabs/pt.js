@@ -19,9 +19,10 @@ const PtTab = (() => {
 
   async function loadTrainers() {
     // v10: role='admin' (admin/veragym 로그인 계정)은 매출담당 드롭다운에서 제외
+    // is_active도 로드 — 신규 등록은 활성자만, 수정 모드는 기존 선택된 비활성자 유지용
     const { data } = await supabase
       .from('trainers')
-      .select('id, name')
+      .select('id, name, is_active')
       .neq('role', 'admin')
       .order('name');
     trainers = data || [];
@@ -367,14 +368,18 @@ const PtTab = (() => {
               <label>매출담당</label>
               <select name="assigned_trainer_id" class="form-select">
                 <option value="">선택</option>
-                ${trainers.map(t => `<option value="${t.id}"${isEdit && t.id === editRecord.assigned_trainer_id ? ' selected' : ''}>${t.name}</option>`).join('')}
+                ${trainers
+                  .filter(t => t.is_active || (isEdit && t.id === editRecord.assigned_trainer_id))
+                  .map(t => `<option value="${t.id}"${isEdit && t.id === editRecord.assigned_trainer_id ? ' selected' : ''}>${t.name}${t.is_active ? '' : ' (퇴직)'}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
               <label>계약담당</label>
               <select name="contract_trainer_id" class="form-select">
                 <option value="">선택</option>
-                ${trainers.map(t => `<option value="${t.id}"${isEdit && t.id === editRecord.contract_trainer_id ? ' selected' : ''}>${t.name}</option>`).join('')}
+                ${trainers
+                  .filter(t => t.is_active || (isEdit && t.id === editRecord.contract_trainer_id))
+                  .map(t => `<option value="${t.id}"${isEdit && t.id === editRecord.contract_trainer_id ? ' selected' : ''}>${t.name}${t.is_active ? '' : ' (퇴직)'}</option>`).join('')}
               </select>
             </div>
           </div>
