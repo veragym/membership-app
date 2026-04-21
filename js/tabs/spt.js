@@ -548,9 +548,12 @@ const SptTab = (() => {
               <textarea name="master_notes" rows="3" placeholder="관리 메모">${escHtml(masterNotes)}</textarea>
             </div>
           </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
-            <button type="submit" class="btn btn-primary">저장</button>
+          <div class="form-actions spt-edit-actions">
+            <button type="button" class="btn btn-danger spt-delete-btn" data-member-id="${escHtml(memberId)}">SPT 삭제</button>
+            <div class="spt-edit-actions-right">
+              <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+              <button type="submit" class="btn btn-primary">저장</button>
+            </div>
           </div>
         </form>
       `,
@@ -559,8 +562,31 @@ const SptTab = (() => {
           e.preventDefault();
           await saveEditForm(memberId, e.target, currentTrainerId);
         });
+        const delBtn = el.querySelector('.spt-delete-btn');
+        if (delBtn) delBtn.addEventListener('click', () => deleteSptMember(memberId, summary.member_name));
       }
     });
+  }
+
+  async function deleteSptMember(memberId, memberName) {
+    const name = memberName || '이 회원';
+    const msg = `[${name}] SPT 내역을 완전히 삭제합니다.\n\n` +
+                `• 배정된 세션 전부 삭제 (트레이너 앱에서도 사라집니다)\n` +
+                `• 코멘트 전부 삭제\n` +
+                `• SPT 설정 삭제\n\n` +
+                `이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`;
+    if (!confirm(msg)) return;
+
+    // 한 번 더 확인 (실수 방지)
+    if (!confirm(`정말 삭제하시겠습니까? "${name}" SPT 데이터 전체 제거`)) return;
+
+    const { data, error } = await supabase.rpc('spt_member_delete', { p_member_id: memberId });
+    if (error) { Toast.error('삭제 실패: ' + error.message); return; }
+    if (!data?.ok) { Toast.error('삭제 실패: ' + (data?.error || '알 수 없음')); return; }
+
+    Toast.success(`삭제 완료 (세션 ${data.sessions_deleted || 0}개, 코멘트 ${data.comments_deleted || 0}개)`);
+    Modal.close();
+    await loadSummaries();
   }
 
   async function saveEditForm(memberId, form, prevTrainerId) {

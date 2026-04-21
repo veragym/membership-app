@@ -2290,8 +2290,8 @@ html, body {
    진행전→노랑, 진행중→초록, 등록→파랑, 관리중→주황,
    완료→보라, 거부/연락안됨/기타→빨강 */
 .spt-status-pending      { background: #FEF3C7; color: #92400E; }  /* 노랑 */
-.spt-status-in-progress  { background: #D1FAE5; color: #065F46; }  /* 초록 */
-.spt-status-registered   { background: #DBEAFE; color: #1D4ED8; }  /* 파랑 */
+.spt-status-in-progress  { background: #DBEAFE; color: #1D4ED8; }  /* 파랑 */
+.spt-status-registered   { background: #D1FAE5; color: #065F46; }  /* 초록 */
 .spt-status-managing     { background: #FFEDD5; color: #9A3412; }  /* 주황 */
 .spt-status-completed    { background: #EDE9FE; color: #5B21B6; }  /* 보라 */
 .spt-status-rejected     { background: #FEE2E2; color: #991B1B; }  /* 빨강 */
@@ -2303,6 +2303,24 @@ html, body {
   font-weight: 700;
   color: #EA580C;
 }
+
+/* SPT 수정 모달 하단 액션 — 삭제 버튼 좌측, 저장/취소 우측 */
+.spt-edit-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.spt-edit-actions-right {
+  display: flex;
+  gap: 8px;
+}
+.btn.btn-danger {
+  background: #EF4444;
+  color: #fff;
+  border: 1px solid #DC2626;
+}
+.btn.btn-danger:hover { background: #DC2626; }
 
 /* ═══════════════════════════════════════════════════════════
    SPT 탭 — 문의관리(.inquiry-table-header / .inquiry-card-main)
