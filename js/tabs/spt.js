@@ -69,7 +69,7 @@ const SptTab = (() => {
     const { data, error } = await supabase
       .from('spt_member_summary')
       .select('*')
-      .order('member_name', { ascending: true });
+      .order('registered_at', { ascending: false });
 
     if (error) {
       Toast.error('SPT 회원 로드 실패: ' + error.message);
@@ -278,7 +278,7 @@ const SptTab = (() => {
     if (isNaN(d.getTime())) return '-';
     const M = d.getMonth() + 1;
     const D = d.getDate();
-    return `${d.getFullYear() % 100}/${M}/${D}`;
+    return `${d.getFullYear()}/${M}/${D}`;
   }
 
   function fmtMonthDay(s) {
@@ -362,8 +362,7 @@ const SptTab = (() => {
     // 최신 코멘트 (한 줄, 말줄임)
     const latest = r._latest_comment;
     const latestInner = latest
-      ? `<span class="spt-cell-cmt-date">${escHtml(fmtMonthDay(latest.created_at))}</span>
-         <span class="spt-cell-cmt-author">${escHtml(latest.trainer_name || '(탈퇴)')}</span>
+      ? `<span class="spt-cell-cmt-author">${escHtml(latest.trainer_name || '(탈퇴)')}</span>
          <span class="spt-cell-cmt-colon">:</span>
          <span class="spt-cell-cmt-body">${escHtml(latest.content || '')}</span>`
       : `<span class="spt-cell-cmt-empty">(아직 코멘트 없음)</span>`;
@@ -385,7 +384,7 @@ const SptTab = (() => {
       ? `<div class="spt-row-cell spt-cell-memo" data-member-id="${escHtml(memberId)}" title="${escHtml(memoRaw)}"><span class="spt-cell-memo-inline">${escHtml(memoRaw)}</span></div>`
       : `<div class="spt-row-cell spt-cell-memo spt-cell-memo-empty">—</div>`;
 
-    const regDate = r.registered_at ? fmtMonthDay(r.registered_at) : '—';
+    const regDate = r.registered_at ? fmtDate(r.registered_at) : '—';
     return `
       <div class="spt-card${isCommentsOpen ? ' is-comments-open' : ''}" data-member-id="${escHtml(memberId)}">
         <div class="spt-row" data-member-id="${escHtml(memberId)}">
