@@ -493,6 +493,14 @@ const InquiryTab = (() => {
                 <label>총결제액 (원) — 수정 시 카드 자동 조정</label>
                 <input type="number" id="inq-total-payment" value="0" min="0" placeholder="총액 입력 시 카드가 총액-현금으로 자동 세팅">
               </div>
+              <div class="form-group">
+                <label>SPT 횟수</label>
+                <input type="number" name="spt_count" min="0" placeholder="0">
+              </div>
+              <div class="form-group full">
+                <label>SPT 희망 시간대</label>
+                <input type="text" name="spt_preferred_time" placeholder="예: 오후 2시~4시">
+              </div>
             </div>
           </div>
           ` : ''}
