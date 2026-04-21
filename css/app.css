@@ -2810,3 +2810,306 @@ html, body {
   .spt-card-body { padding: 10px 10px; }
 }
 
+/* ───────── 업무/홍보/센터 관리 탭 ───────── */
+.ops-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+  align-items: start;
+}
+.ops-panel {
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.ops-panel-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-bg-1);
+}
+.ops-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.ops-panel-body {
+  padding: 0;
+}
+.ops-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ─── 일정표 그리드 (light theme) ─── */
+.ops-cal-wrap { display: flex; flex-direction: column; }
+.ops-cal-date-row {
+  display: flex;
+  background: var(--color-bg-2);
+  border-bottom: 2px solid var(--color-border);
+  padding: 4px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.ops-cal-gutter {
+  width: 52px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+}
+.ops-cal-day-hdr {
+  flex: 1;
+  text-align: center;
+  padding: 4px 2px;
+}
+.ops-cal-dhdr-name {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-bottom: 1px;
+  text-transform: uppercase;
+}
+.ops-cal-dhdr-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  text-align: center;
+  border-radius: 50%;
+}
+.ops-cal-day-hdr.today .ops-cal-dhdr-num {
+  color: var(--color-text-on-primary);
+  background: var(--color-primary);
+}
+.ops-cal-day-hdr.past .ops-cal-dhdr-name { color: var(--color-text-muted); }
+.ops-cal-day-hdr.past .ops-cal-dhdr-num { color: var(--color-text-muted); }
+.ops-cal-grid-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(100vh - 260px);
+}
+.ops-cal-grid {
+  display: grid;
+  grid-template-columns: 52px repeat(4, 1fr);
+}
+.ops-cal-time-col { position: relative; }
+.ops-cal-time-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-align: right;
+  right: 6px;
+  transform: translateY(-50%);
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.ops-cal-day-col-body {
+  position: relative;
+  border-left: 1px solid var(--color-divider);
+}
+.ops-cal-gridline-hr {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: var(--color-border);
+  pointer-events: none;
+}
+.ops-cal-gridline-half {
+  position: absolute;
+  left: 4px; right: 0;
+  height: 0;
+  border-top: 1px dashed var(--color-divider);
+  pointer-events: none;
+}
+.ops-cal-click-zone {
+  position: absolute;
+  left: 0; right: 0;
+  cursor: pointer;
+  transition: background .12s;
+}
+.ops-cal-click-zone:hover { background: var(--color-primary-bg); }
+.ops-cal-click-zone.past { background: var(--color-bg-2); cursor: default; }
+.ops-cal-click-zone.past:hover { background: var(--color-bg-2); }
+.ops-cal-now-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: var(--color-primary);
+  z-index: 3;
+  pointer-events: none;
+}
+.ops-cal-now-line::before {
+  content: '';
+  position: absolute;
+  left: -3px; top: -3px;
+  width: 8px; height: 8px;
+  background: var(--color-primary);
+  border-radius: 50%;
+}
+.ops-cal-event {
+  position: absolute;
+  left: 2px; right: 2px;
+  border-radius: 6px;
+  padding: 3px 4px;
+  overflow: hidden;
+  cursor: pointer;
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.ops-cal-event-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  width: 100%;
+}
+.ops-cal-event-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .ops-layout { grid-template-columns: 1fr; }
+}
+
+/* ─── 예정 업무 리스트 (우측 패널) ─── */
+.ops-upcoming-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--color-divider);
+}
+.ops-upcoming-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--color-bg-1);
+  cursor: pointer;
+  transition: background .12s;
+  align-items: flex-start;
+}
+.ops-upcoming-item:hover { background: var(--color-bg-2); }
+.ops-upcoming-chip {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.ops-upcoming-main { flex: 1; min-width: 0; }
+.ops-upcoming-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+.ops-upcoming-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.ops-upcoming-notes {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ─── 일정 등록/수정 폼 ─── */
+.sched-form .form-row { margin-bottom: 14px; }
+.sched-form .form-row label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+.sched-form .form-row input[type="text"],
+.sched-form .form-row input[type="date"],
+.sched-form .form-row input[type="time"],
+.sched-form .form-row textarea {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-1);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.sched-form .form-row input:focus,
+.sched-form .form-row textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+.sched-form .form-row-2 {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.sched-form .form-row-2 .form-row { margin-bottom: 0; }
+.sched-type-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.sched-type-pill {
+  --pill-color: #10B981;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-bg-1);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all .15s;
+}
+.sched-type-pill:hover { border-color: var(--color-border-strong); }
+.sched-type-pill.active {
+  background: var(--pill-color);
+  border-color: var(--pill-color);
+  color: #fff;
+}
+.sched-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-divider);
+}
+.sched-form-actions .btn-danger {
+  margin-right: auto;
+  background: transparent;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+.sched-form-actions .btn-danger:hover {
+  background: var(--color-danger);
+  color: #fff;
+}
+
