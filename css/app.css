@@ -2293,98 +2293,209 @@ html, body {
 .spt-status-unreachable  { background: #FEE2E2; color: #991B1B; }
 .spt-status-other        { background: #FEF3C7; color: #92400E; }
 
+/* ═══════════════════════════════════════════════════════════
+   SPT 탭 — 문의관리(.inquiry-table-header / .inquiry-card-main)
+   디자인 규칙 100% 일치 (padding, gap, typography, center, dividers)
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --spt-cols:
+    54px                    /* 이름 (한글 3자 타이트) */
+    104px                   /* 연락처 (010-XXXX-XXXX 타이트) */
+    60px                    /* 오전/오후 */
+    82px                    /* 담당트레이너 */
+    minmax(100px, 1fr)      /* 관리자 메모 */
+    64px                    /* 진행상태 */
+    68px                    /* spt1 날짜 */
+    68px                    /* spt2 날짜 */
+    minmax(220px, 2.4fr)    /* 최신 코멘트 — 여유 확대 */
+    180px;                  /* 액션 — +코멘트 N건 ▼ / 수정 두 버튼 안 짤리게 */
+}
+
 /* 카드 리스트 컨테이너 */
 .spt-card-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 0;
+  padding: 0;
 }
 
 /* 회원 카드 */
 .spt-card {
   background: var(--color-bg-1);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  border-radius: var(--radius-xs);
+  overflow: visible;
+  margin-bottom: 4px;
+  transition: border-color 0.15s ease;
 }
-.spt-card.is-open {
+.spt-card.is-comments-open {
   border-color: var(--color-primary-border);
-  box-shadow: var(--shadow-sm);
 }
 
-/* ── 가로 9셀 행 레이아웃 ── */
-.spt-row {
+/* 필터 행 — 컬럼 헤더 바로 위에 위치, 동일 grid-template 공유 */
+.spt-row-filters {
   display: grid;
-  grid-template-columns:
-    minmax(70px, 0.9fr)   /* 이름 */
-    minmax(110px, 1fr)    /* 연락처 */
-    minmax(60px, 0.5fr)   /* 오전/오후 */
-    minmax(80px, 0.7fr)   /* 담당트레이너 */
-    minmax(70px, 0.6fr)   /* 진행상태 */
-    minmax(70px, 0.6fr)   /* spt1 날짜 */
-    minmax(70px, 0.6fr)   /* spt2 날짜 */
-    minmax(200px, 2.5fr)  /* 최신 코멘트 */
-    minmax(140px, 0.8fr); /* 액션 */
+  grid-template-columns: var(--spt-cols);
   gap: 8px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 12px;
+  margin-bottom: 4px;
+}
+.spt-row-filters > div { min-width: 0; }
+.spt-filter-select {
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
   font-size: 12px;
-  line-height: 1.4;
-}
-.spt-row-header {
-  font-weight: 600;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  background: var(--color-bg-2);
-  padding: 6px 10px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
-  margin-bottom: 2px;
+  background: var(--color-bg-1);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  cursor: pointer;
 }
-.spt-row-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spt-row-cell.spt-row-comment { white-space: normal; overflow: hidden; }
+.spt-filter-select:hover { border-color: var(--color-primary-border); }
+.spt-filter-select:focus { outline: none; border-color: var(--color-primary); }
+
+/* 헤더 — sticky, inquiry-table-header 동일 패턴 */
+.spt-row-header {
+  position: sticky;
+  top: 65px;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: var(--spt-cols);
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+.spt-row-header > div {
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* 데이터 행 — inquiry-card-main 동일 패턴 */
+.spt-row {
+  display: grid;
+  grid-template-columns: var(--spt-cols);
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.spt-row-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 공통 세로 구분선 — 첫 셀 제외, 모든 인접 셀 사이 얇은 divider */
+.spt-row-header > div + div,
+.spt-row > div + div {
+  border-left: 1px solid var(--color-divider);
+  padding-left: 8px;
+}
+
+/* 셀별 typography — inquiry 규칙 따름 (name 12px normal, phone/secondary, etc) */
+.spt-cell-name    { font-size: 12px; font-weight: 400; }
+.spt-cell-phone   { color: var(--color-text-secondary); font-size: 12px; font-feature-settings: "tnum"; }
+.spt-cell-trainer { font-size: 12px; color: var(--color-text-primary); }
+
+/* 최신 코멘트 행 컨텐츠 (M/D 트레이너 : 내용) */
 .spt-row-comment-text {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.spt-cell-name { font-weight: 600; color: var(--color-text-primary); }
-.spt-cell-phone { color: var(--color-text-secondary); font-feature-settings: "tnum"; }
-.spt-cell-trainer { color: var(--color-text-primary); }
-.spt-cell-cmt-date { color: var(--color-text-muted); font-weight: 600; margin-right: 4px; }
+.spt-cell-cmt-date   { color: var(--color-text-muted); font-weight: 600; margin-right: 4px; }
 .spt-cell-cmt-author { color: var(--color-text-primary); font-weight: 600; margin-right: 2px; }
-.spt-cell-cmt-colon { color: var(--color-text-muted); margin-right: 4px; }
-.spt-cell-cmt-body { color: var(--color-text-primary); }
-.spt-cell-cmt-empty { color: var(--color-text-muted); font-style: italic; }
+.spt-cell-cmt-colon  { color: var(--color-text-muted); margin-right: 4px; }
+.spt-cell-cmt-body   { color: var(--color-text-primary); }
+.spt-cell-cmt-empty  { color: var(--color-text-muted); font-style: italic; }
 
+/* 관리자 메모 — inquiry 의 .col-content 패턴 완벽 재현 */
+.spt-cell-memo {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: outline-color 0.1s, background 0.1s;
+}
+.spt-cell-memo-inline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+.spt-cell-memo:hover:not(.spt-cell-memo-empty) {
+  outline: 1px solid var(--color-border);
+  outline-offset: -2px;
+  background: var(--color-bg-2);
+}
+.spt-cell-memo.expanded {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  text-align: left;
+  outline: 1px solid var(--color-primary);
+  outline-offset: -2px;
+  background: var(--color-bg-2);
+  padding: 6px 10px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.spt-cell-memo.expanded .spt-cell-memo-inline {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  display: block;
+  max-width: 100%;
+}
+.spt-cell-memo-empty { color: var(--color-text-muted); cursor: default; }
+
+/* 액션 영역 — 중앙 정렬, inquiry 의 .col-actions .btn-action 과 동일 높이 */
 .spt-row-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
-  justify-content: flex-end;
-  white-space: nowrap;
+  justify-content: center;
+  flex-shrink: 0;
 }
-.spt-comment-expand-btn,
-.spt-detail-toggle-btn {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 11px;
+.spt-row-actions .btn-action {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.spt-comment-expand-btn {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-family);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-1);
   color: var(--color-text-secondary);
   cursor: pointer;
-  line-height: 1;
   white-space: nowrap;
-  transition: border-color 0.15s, color 0.15s;
+  transition: all 0.15s;
 }
-.spt-comment-expand-btn:hover,
-.spt-detail-toggle-btn:hover {
+.spt-comment-expand-btn:hover {
   color: var(--color-primary);
   border-color: var(--color-primary-border);
+  background: var(--color-primary-bg);
 }
 .spt-cell-action-placeholder { display: inline-block; min-width: 4px; }
 

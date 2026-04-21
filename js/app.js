@@ -2,7 +2,7 @@
  * 앱 초기화 + 탭 라우팅
  */
 const App = (() => {
-  const TABS = ['inquiry', 'stats', 'pt', 'promo', 'settings'];
+  const TABS = ['inquiry', 'stats', 'pt', 'spt', 'promo', 'settings'];
   const tabInitialized = {};
   let activeTab = 'inquiry';
 
@@ -112,6 +112,7 @@ const App = (() => {
       if (tabId === 'inquiry' && typeof InquiryTab !== 'undefined') InquiryTab.init();
       if (tabId === 'stats' && typeof StatsTab !== 'undefined') StatsTab.init();
       if (tabId === 'pt' && typeof PtTab !== 'undefined') PtTab.init();
+      if (tabId === 'spt' && typeof SptTab !== 'undefined') SptTab.init();
       if (tabId === 'promo' && typeof PromoTab !== 'undefined') PromoTab.init();
       if (tabId === 'settings' && typeof SettingsTab !== 'undefined') SettingsTab.init();
     }
