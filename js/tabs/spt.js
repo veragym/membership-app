@@ -945,6 +945,68 @@ const SptTab = (() => {
     });
   }
 
+  // ─────────────── SPT 신규 등록 자동완성 (inquiries 테이블 읽기만) ───────────────
+  function bindSptCreateAutocomplete(el) {
+    const nameInput  = el.querySelector('input[name="name"]');
+    const phoneInput = el.querySelector('input[name="phone"]');
+    const nameBox    = el.querySelector('.resv-suggest[data-for="name"]');
+    const phoneBox   = el.querySelector('.resv-suggest[data-for="phone"]');
+    if (!nameInput || !phoneInput || !nameBox || !phoneBox) return;
+
+    let timer = null;
+
+    const renderItems = (box, items) => {
+      if (!items.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      box.innerHTML = items.map(r =>
+        `<div class="resv-suggest-item" data-name="${escHtml(r.name||'')}" data-phone="${escHtml(r.phone||'')}">
+          <span class="s-name">${escHtml(r.name || '-')}</span>
+          <span class="s-phone">${escHtml(r.phone || '')}</span>
+        </div>`
+      ).join('');
+      box.style.display = 'block';
+      box.querySelectorAll('.resv-suggest-item').forEach(it => {
+        it.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          nameInput.value  = it.dataset.name;
+          phoneInput.value = formatPhone(it.dataset.phone);
+          nameBox.style.display  = 'none';
+          phoneBox.style.display = 'none';
+        });
+      });
+    };
+
+    const fetchAndShow = async (field, rawQ, box) => {
+      const col = field === 'name' ? 'name' : 'phone';
+      const pattern = field === 'phone' ? rawQ.replace(/[^0-9]/g, '') : rawQ.trim();
+      if (!pattern) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      const { data, error } = await supabase
+        .from('inquiries')
+        .select('id, name, phone')
+        .ilike(col, `${pattern}%`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) return;
+      const seen = new Set(), uniq = [];
+      (data || []).forEach(r => {
+        const key = `${r.name||''}|${r.phone||''}`;
+        if (!seen.has(key)) { seen.add(key); uniq.push(r); }
+      });
+      renderItems(box, uniq.slice(0, 6));
+    };
+
+    const trigger = (field, input, box) => {
+      if (timer) clearTimeout(timer);
+      const q = input.value || '';
+      if (!q.trim()) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      timer = setTimeout(() => fetchAndShow(field, q, box), 220);
+    };
+
+    nameInput.addEventListener('input',  () => trigger('name',  nameInput,  nameBox));
+    phoneInput.addEventListener('input', () => trigger('phone', phoneInput, phoneBox));
+    nameInput.addEventListener('blur',  () => setTimeout(() => { nameBox.style.display  = 'none'; }, 200));
+    phoneInput.addEventListener('blur', () => setTimeout(() => { phoneBox.style.display = 'none'; }, 200));
+  }
+
   // ─────────────── + SPT 신규 모달 (유지) ───────────────
   function openCreateModal() {
     Modal.open({
@@ -954,13 +1016,15 @@ const SptTab = (() => {
       html: `
         <form id="spt-create-form">
           <div class="form-grid">
-            <div class="form-group full">
+            <div class="form-group full" style="position:relative">
               <label>이름 *</label>
-              <input type="text" name="name" required>
+              <input type="text" name="name" autocomplete="off" required>
+              <div class="resv-suggest" data-for="name"></div>
             </div>
-            <div class="form-group full">
+            <div class="form-group full" style="position:relative">
               <label>전화번호 *</label>
-              <input type="tel" name="phone" placeholder="010-0000-0000" required>
+              <input type="tel" name="phone" placeholder="010-0000-0000" autocomplete="off" required>
+              <div class="resv-suggest" data-for="phone"></div>
             </div>
             <div class="form-group">
               <label>수업 수 *</label>
@@ -987,6 +1051,7 @@ const SptTab = (() => {
       `,
       onOpen: (el) => {
         bindPhoneFormat(el.querySelector('input[name="phone"]'));
+        bindSptCreateAutocomplete(el);
         el.querySelector('#spt-create-form').addEventListener('submit', async (e) => {
           e.preventDefault();
           await submitCreate(e.target);

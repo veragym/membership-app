@@ -391,6 +391,68 @@ const InquiryTab = (() => {
     return row;
   }
 
+  // ────────── 문의 추가 시 자동완성 (inquiries 테이블 — 읽기만) ──────────
+  function bindInquiryAutocomplete(el) {
+    const nameInput  = el.querySelector('input[name="name"]');
+    const phoneInput = el.querySelector('input[name="phone"]');
+    const nameBox    = el.querySelector('.resv-suggest[data-for="name"]');
+    const phoneBox   = el.querySelector('.resv-suggest[data-for="phone"]');
+    if (!nameInput || !phoneInput || !nameBox || !phoneBox) return;
+
+    let timer = null;
+
+    const renderItems = (box, items) => {
+      if (!items.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      box.innerHTML = items.map(r =>
+        `<div class="resv-suggest-item" data-name="${escHtml(r.name||'')}" data-phone="${escHtml(r.phone||'')}">
+          <span class="s-name">${escHtml(r.name || '-')}</span>
+          <span class="s-phone">${escHtml(r.phone || '')}</span>
+        </div>`
+      ).join('');
+      box.style.display = 'block';
+      box.querySelectorAll('.resv-suggest-item').forEach(it => {
+        it.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          nameInput.value  = it.dataset.name;
+          phoneInput.value = formatPhone(it.dataset.phone);
+          nameBox.style.display  = 'none';
+          phoneBox.style.display = 'none';
+        });
+      });
+    };
+
+    const fetchAndShow = async (field, rawQ, box) => {
+      const col = field === 'name' ? 'name' : 'phone';
+      const pattern = field === 'phone' ? rawQ.replace(/[^0-9]/g, '') : rawQ.trim();
+      if (!pattern) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      const { data, error } = await supabase
+        .from('inquiries')
+        .select('id, name, phone')
+        .ilike(col, `${pattern}%`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) return;
+      const seen = new Set(), uniq = [];
+      (data || []).forEach(r => {
+        const key = `${r.name||''}|${r.phone||''}`;
+        if (!seen.has(key)) { seen.add(key); uniq.push(r); }
+      });
+      renderItems(box, uniq.slice(0, 6));
+    };
+
+    const trigger = (field, input, box) => {
+      if (timer) clearTimeout(timer);
+      const q = input.value || '';
+      if (!q.trim()) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      timer = setTimeout(() => fetchAndShow(field, q, box), 220);
+    };
+
+    nameInput.addEventListener('input',  () => trigger('name',  nameInput,  nameBox));
+    phoneInput.addEventListener('input', () => trigger('phone', phoneInput, phoneBox));
+    nameInput.addEventListener('blur',  () => setTimeout(() => { nameBox.style.display  = 'none'; }, 200));
+    phoneInput.addEventListener('blur', () => setTimeout(() => { phoneBox.style.display = 'none'; }, 200));
+  }
+
   // ────────── 문의 추가/수정 모달 ──────────
   function openInquiryForm(existing) {
     const isEdit = !!existing;
@@ -401,13 +463,15 @@ const InquiryTab = (() => {
       html: `
         <form id="inquiry-form">
           <div class="form-grid">
-            <div class="form-group">
+            <div class="form-group" style="position:relative">
               <label>이름 *</label>
-              <input type="text" name="name" value="${existing?.name || ''}" required>
+              <input type="text" name="name" value="${existing?.name || ''}" autocomplete="off" required>
+              ${!isEdit ? '<div class="resv-suggest" data-for="name"></div>' : ''}
             </div>
-            <div class="form-group">
+            <div class="form-group" style="position:relative">
               <label>전화번호 *</label>
-              <input type="tel" name="phone" value="${existing?.phone || ''}" placeholder="010-0000-0000" required>
+              <input type="tel" name="phone" value="${existing?.phone || ''}" placeholder="010-0000-0000" autocomplete="off" required>
+              ${!isEdit ? '<div class="resv-suggest" data-for="phone"></div>' : ''}
             </div>
             <div class="form-group">
               <label>문의일자</label>
@@ -528,6 +592,9 @@ const InquiryTab = (() => {
       onOpen: (el) => {
         // 전화번호 자동 포맷
         bindPhoneFormat(el.querySelector('input[name="phone"]'));
+
+        // 신규 추가 모드: 이름/전화번호 자동완성 (inquiries 테이블 기존 기록 검색)
+        if (!isEdit) bindInquiryAutocomplete(el);
 
         // 드롭다운 생성
         Dropdown.create({ container: el.querySelector('#dd-category'), category: '구분', name: 'category', value: existing?.category || '' });
