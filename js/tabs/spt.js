@@ -659,10 +659,7 @@ const SptTab = (() => {
 
     const rebuildBtnLabel = (open) => {
       if (!btn) return;
-      const raw = btn.textContent || '';
-      const m = raw.match(/\+코멘트\s*(\d+)건/);
-      const n = m ? m[1] : '';
-      btn.textContent = `+코멘트 ${n}건 ${open ? '▲' : '▼'}`;
+      btn.textContent = `코멘트 ${open ? '▲' : '▼'}`;
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     };
 
@@ -860,7 +857,7 @@ const SptTab = (() => {
     commentsCache.set(memberId, data || []);
 
     if (!data || data.length === 0) {
-      containerEl.innerHTML = `<div class="empty-state" style="padding:16px;">아직 코멘트가 없습니다.</div>`;
+      containerEl.innerHTML = `<div class="empty-state"><span>아직 코멘트가 없습니다.</span></div>`;
       return;
     }
 
@@ -887,7 +884,7 @@ const SptTab = (() => {
           `;
         }).join('')}
       </div>
-      <p class="spt-hint">※ 추가는 트레이너 앱에서만. 여기서는 열람 + 수정 + 삭제(모더레이션).</p>
+      <div class="spt-hint"><span>※ 추가는 트레이너 앱에서만. 여기서는 열람 + 수정 + 삭제(모더레이션).</span></div>
     `;
 
     containerEl.querySelectorAll('.btn-spt-comment-del').forEach(btn => {
