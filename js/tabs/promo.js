@@ -92,6 +92,10 @@ const PromoTab = (() => {
           <div class="ops-panel">
             <div class="ops-panel-header">
               <span class="ops-panel-title">예정 업무 (오늘 이후)</span>
+              <div class="ops-upcoming-actions">
+                <button type="button" class="btn-upcoming-action" id="btnUpcomingDelSelected" disabled>선택삭제</button>
+                <button type="button" class="btn-upcoming-action btn-upcoming-danger" id="btnUpcomingDelAll">전체삭제</button>
+              </div>
             </div>
             <div class="ops-panel-body" id="opsUpcomingList">
               <div class="ops-placeholder">불러오는 중…</div>
@@ -101,6 +105,8 @@ const PromoTab = (() => {
       </div>
     `;
     document.getElementById('btnShareSched').addEventListener('click', shareScheduleImage);
+    document.getElementById('btnUpcomingDelSelected').addEventListener('click', handleUpcomingDeleteSelected);
+    document.getElementById('btnUpcomingDelAll').addEventListener('click', handleUpcomingDeleteAll);
     renderReservations();
     loadScheduleView();
   }
@@ -506,15 +512,22 @@ const PromoTab = (() => {
   function renderUpcoming() {
     const el = document.getElementById('opsUpcomingList');
     if (!el) return;
+    const delAllBtn = document.getElementById('btnUpcomingDelAll');
     const todayYMD = toYMD(new Date());
     const upcoming = scheduleData.filter(s => s.sched_date >= todayYMD);
     if (!upcoming.length) {
       el.innerHTML = '<div class="ops-placeholder">예정된 업무가 없습니다.</div>';
+      if (delAllBtn) delAllBtn.disabled = true;
+      updateUpcomingSelectedBtn();
       return;
     }
+    if (delAllBtn) delAllBtn.disabled = false;
     el.innerHTML = `<div class="ops-upcoming-list">` + upcoming.map(s => {
       const bg = s.color || TYPE_COLORS[s.type] || TYPE_COLORS['업무'];
       return `<div class="ops-upcoming-item" data-sched-id="${s.id}">
+        <label class="ops-upcoming-check" title="선택">
+          <input type="checkbox" class="ops-upcoming-checkbox" data-sched-id="${s.id}">
+        </label>
         <div class="ops-upcoming-chip" style="background:${bg}">${esc(s.type)}</div>
         <div class="ops-upcoming-main">
           <div class="ops-upcoming-title">${esc(s.title || s.type)}</div>
@@ -523,12 +536,56 @@ const PromoTab = (() => {
         </div>
       </div>`;
     }).join('') + `</div>`;
+
+    // 체크박스는 row 클릭(모달 열기)과 분리
+    el.querySelectorAll('.ops-upcoming-check, .ops-upcoming-checkbox').forEach(n => {
+      n.addEventListener('click', (e) => e.stopPropagation());
+    });
+    el.querySelectorAll('.ops-upcoming-checkbox').forEach(cb => {
+      cb.addEventListener('change', updateUpcomingSelectedBtn);
+    });
     el.querySelectorAll('.ops-upcoming-item').forEach(it => {
-      it.addEventListener('click', () => {
+      it.addEventListener('click', (e) => {
+        if (e.target.closest('.ops-upcoming-check')) return;
         const row = scheduleData.find(s => s.id === it.dataset.schedId);
         if (row) openSchedModal(row);
       });
     });
+    updateUpcomingSelectedBtn();
+  }
+
+  function getSelectedUpcomingIds() {
+    const el = document.getElementById('opsUpcomingList');
+    if (!el) return [];
+    return Array.from(el.querySelectorAll('.ops-upcoming-checkbox:checked')).map(cb => cb.dataset.schedId);
+  }
+  function updateUpcomingSelectedBtn() {
+    const btn = document.getElementById('btnUpcomingDelSelected');
+    if (!btn) return;
+    const n = getSelectedUpcomingIds().length;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `선택삭제 (${n})` : '선택삭제';
+  }
+
+  async function handleUpcomingDeleteSelected() {
+    const ids = getSelectedUpcomingIds();
+    if (!ids.length) return;
+    if (!confirm(`선택한 ${ids.length}건의 일정을 삭제하시겠습니까?`)) return;
+    const { error } = await supabase.from('staff_schedules').delete().in('id', ids);
+    if (error) { Toast.error('삭제 실패: ' + error.message); return; }
+    Toast.success(`${ids.length}건 삭제되었습니다`);
+    loadScheduleView();
+  }
+
+  async function handleUpcomingDeleteAll() {
+    const todayYMD = toYMD(new Date());
+    const upcoming = scheduleData.filter(s => s.sched_date >= todayYMD);
+    if (!upcoming.length) return;
+    if (!confirm(`오늘 이후 예정된 ${upcoming.length}건의 일정을 모두 삭제하시겠습니까?\n(되돌릴 수 없습니다)`)) return;
+    const { error } = await supabase.from('staff_schedules').delete().gte('sched_date', todayYMD);
+    if (error) { Toast.error('삭제 실패: ' + error.message); return; }
+    Toast.success(`${upcoming.length}건 전체 삭제되었습니다`);
+    loadScheduleView();
   }
 
   // ═══ 일정 등록/수정 모달 ═══
