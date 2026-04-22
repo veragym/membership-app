@@ -423,14 +423,11 @@ const SptTab = (() => {
          <span class="spt-cell-cmt-body">${escHtml(latest.content || '')}</span>`
       : `<span class="spt-cell-cmt-empty">(아직 코멘트 없음)</span>`;
 
-    // 코멘트가 1건이라도 있으면 펼침 버튼 노출 (수정/삭제 접근용).
-    // 표기: 1건 → "코멘트 ▼", 2건+ → "+코멘트 N건 ▼" (N = 총건수 - 1)
+    // 코멘트가 1건이라도 있으면 펼침 버튼 노출 (수정/삭제 접근용). 라벨은 '코멘트 ▼' 로 통일.
     const totalCount = r._comment_count || 0;
-    const extraCount = Math.max(0, totalCount - 1);
-    const cmtBtnLabel = extraCount > 0 ? `+코멘트 ${extraCount}건` : '코멘트';
     const cmtBtnHtml = totalCount > 0
       ? `<button class="spt-comment-expand-btn" data-member-id="${escHtml(memberId)}" aria-expanded="${isCommentsOpen}">
-           ${cmtBtnLabel} ${isCommentsOpen ? '▲' : '▼'}
+           코멘트 ${isCommentsOpen ? '▲' : '▼'}
          </button>`
       : `<span class="spt-cell-action-placeholder">&nbsp;</span>`;
 
