@@ -2673,33 +2673,46 @@ html, body {
 }
 
 /* 코멘트 전체 히스토리 (펼침)
-   .spt-row 와 동일 grid 를 사용해 '최신 코멘트' 컬럼(10번) 아래로만 표시 */
+   .spt-row 와 동일 grid 를 공유해 각 행의 content 는 '최신 코멘트' 컬럼(10),
+   actions 는 '액션' 컬럼(11)에 정렬된다 — 상단 요약 행과 세로선이 일치. */
 .spt-comments-full {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-bg-1);
+  animation: spt-slide-down 0.18s ease-out;
+}
+/* 비-item 자식 (loading, empty-state, spt-hint) 은 코멘트 컬럼 아래로만 표시 */
+.spt-comments-full > .loading-center,
+.spt-comments-full > .empty-state,
+.spt-comments-full > .spt-hint {
   display: grid;
   grid-template-columns: var(--spt-cols);
   gap: 6px;
-  border-top: 1px solid var(--color-divider);
-  background: var(--color-bg-1);
-  padding: 4px 14px 10px;
-  animation: spt-slide-down 0.18s ease-out;
+  padding: 8px 14px;
 }
-.spt-comments-full > * {
-  grid-column: 10 / 11;
-  min-width: 0;
-}
+.spt-comments-full > .loading-center > *,
+.spt-comments-full > .empty-state > *,
+.spt-comments-full > .spt-hint { grid-column: 10 / 11; min-width: 0; }
+.spt-comments-full > .spt-hint { padding: 6px 14px 10px; }
+.spt-comments-full > .spt-hint > * { grid-column: 10 / 11; }
+
 .spt-comments-history {
   display: flex;
   flex-direction: column;
 }
 .spt-comment-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 4px;
+  display: grid;
+  grid-template-columns: var(--spt-cols);
+  gap: 6px;
+  align-items: center;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--color-divider);
   font-size: 13px;
 }
+.spt-comment-item > .spt-comment-line { grid-column: 10 / 11; min-width: 0; }
+.spt-comment-item > .spt-comment-actions { grid-column: 11 / 12; justify-self: end; }
+.spt-comment-item > .spt-comment-edit { grid-column: 10 / 12; }
 .spt-comment-item:last-child { border-bottom: none; }
 .spt-comment-line {
   flex: 1;
