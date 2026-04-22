@@ -2378,7 +2378,7 @@ html, body {
     52px                    /* spt1 */
     52px                    /* spt2 */
     minmax(128px, 1.6fr)    /* 최신 코멘트 (80%로 축소) */
-    56px;                   /* 액션 (수정만) */
+    124px;                  /* 액션 (코멘트 ▼ + 수정) */
 }
 
 /* 카드 리스트 컨테이너 */
@@ -2544,6 +2544,8 @@ html, body {
   align-items: center;
   justify-content: flex-end;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .spt-row-actions .btn-action {
   height: 32px;
