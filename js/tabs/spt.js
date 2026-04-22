@@ -52,7 +52,19 @@ const SptTab = (() => {
   // Supabase Realtime 구독 — 트레이너 앱이 spt_sessions/comments/members 변경 시 즉시 반영
   function subscribeRealtime() {
     if (_realtimeChannel) return;
-    const debouncedReload = debounce(() => { loadSummaries(); }, 400);
+    // Realtime 재로드: loadSummaries 후 펼쳐진 코멘트 영역도 다시 채운다.
+    // (그렇지 않으면 renderList() 가 .spt-comments-full 을 스피너 초기 상태로 되돌려서 stuck)
+    const debouncedReload = debounce(async () => {
+      await loadSummaries();
+      for (const mid of expandedComments) {
+        const card = document.querySelector(`.spt-card[data-member-id="${CSS.escape(mid)}"]`);
+        if (!card) continue;
+        const el = card.querySelector(`.spt-comments-full[data-member-id="${CSS.escape(mid)}"]`);
+        if (!el) continue;
+        el.style.display = '';
+        await loadAndRenderComments(el, mid);
+      }
+    }, 400);
     _realtimeChannel = supabase.channel('spt-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_sessions' }, debouncedReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_member_comments' }, debouncedReload)
@@ -449,8 +461,8 @@ const SptTab = (() => {
             <div class="spt-row-comment-text" title="${escHtml(latest ? (latest.trainer_name + ': ' + latest.content) : '(아직 코멘트 없음)')}">${latestInner}</div>
           </div>
           <div class="spt-row-cell spt-row-actions">
-            ${cmtBtnHtml}
             ${editBtnHtml}
+            ${cmtBtnHtml}
           </div>
         </div>
 

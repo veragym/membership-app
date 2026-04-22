@@ -2378,7 +2378,7 @@ html, body {
     52px                    /* spt1 */
     52px                    /* spt2 */
     minmax(128px, 1.6fr)    /* 최신 코멘트 (80%로 축소) */
-    124px;                  /* 액션 (코멘트 ▼ + 수정) */
+    160px;                  /* 액션 (수정 + 코멘트▼) */
 }
 
 /* 카드 리스트 컨테이너 */
@@ -2544,8 +2544,12 @@ html, body {
   align-items: center;
   justify-content: flex-end;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
+}
+.spt-row-actions .btn-action,
+.spt-row-actions .spt-comment-expand-btn {
+  padding: 0 8px;
 }
 .spt-row-actions .btn-action {
   height: 32px;
@@ -2668,12 +2672,20 @@ html, body {
   margin-top: 2px;
 }
 
-/* 코멘트 전체 히스토리 (펼침) */
+/* 코멘트 전체 히스토리 (펼침)
+   .spt-row 와 동일 grid 를 사용해 '최신 코멘트' 컬럼(10번) 아래로만 표시 */
 .spt-comments-full {
+  display: grid;
+  grid-template-columns: var(--spt-cols);
+  gap: 6px;
   border-top: 1px solid var(--color-divider);
   background: var(--color-bg-1);
   padding: 4px 14px 10px;
   animation: spt-slide-down 0.18s ease-out;
+}
+.spt-comments-full > * {
+  grid-column: 10 / 11;
+  min-width: 0;
 }
 .spt-comments-history {
   display: flex;
