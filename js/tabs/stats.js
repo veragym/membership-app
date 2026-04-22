@@ -327,16 +327,19 @@ const StatsTab = (() => {
   }
 
   // ───────── 카카오톡 템플릿 ─────────
-  // v3: 주차 번호/주차 매출 기준. 남은 매출 = 주차 목표 - 주차 매출.
+  // v4: 주차 매출 기준. 남은 매출 = 실제 - 목표 (달성 시 +, 미달 시 - 로 표기).
+  //     총 누적매출과 총 목표 사이에 빈 줄 삽입.
   function buildKakaoText({ today, todayRev, current, weekRev, weekInfo, fcTarget, ptTarget }) {
     const m = today.getMonth() + 1, d = today.getDate();
     const weekNo = weekInfo?.weekNumber || 1;
     const fmt = n => n.toLocaleString() + '원';
+    // 달성 시 +, 미달 시 - 로 명시. (실제 - 목표 부호 그대로)
+    const fmtDiff = n => (n >= 0 ? '+' : '-') + Math.abs(n).toLocaleString() + '원';
     const wk = weekRev || { fc: 0, pt: 0 };
-    const fcRemain = fcTarget - wk.fc;
-    const ptRemain = ptTarget - wk.pt;
+    const fcDiff = wk.fc - fcTarget;
+    const ptDiff = wk.pt - ptTarget;
     const totalTarget = fcTarget + ptTarget;
-    const totalRemain = fcRemain + ptRemain;
+    const totalDiff = fcDiff + ptDiff;
     return [
       `베라짐 미사점 ${m}월 ${weekNo}주차`,
       `현재 매출 보고드립니다.`,
@@ -345,18 +348,19 @@ const StatsTab = (() => {
       `${m}월 ${d}일까지 누적 매출`,
       `${fmt(current.fc)} (부가세 제외)`,
       `FC 목표 매출 ${fmt(fcTarget)}`,
-      `FC 남은 매출 ${fmt(fcRemain)}`,
+      `FC 남은 매출 ${fmtDiff(fcDiff)}`,
       ``,
       `PT 금일 매출 ${fmt(todayRev.pt)}`,
       `${m}월 ${d}일까지 누적 매출`,
       `${fmt(current.pt)} (계약금액)`,
       `PT 목표 매출 ${fmt(ptTarget)}`,
-      `PT 남은 매출 ${fmt(ptRemain)}`,
+      `PT 남은 매출 ${fmtDiff(ptDiff)}`,
       ``,
       `금일 매출 ${fmt(todayRev.fc + todayRev.pt)}`,
       `총 누적매출 ${fmt(current.fc + current.pt)}`,
+      ``,
       `총 목표 매출 ${fmt(totalTarget)}`,
-      `총 남은 매출 ${fmt(totalRemain)} 입니다.`,
+      `총 남은 매출 ${fmtDiff(totalDiff)} 입니다.`,
     ].join('\n');
   }
 
