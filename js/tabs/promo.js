@@ -19,7 +19,7 @@ const PromoTab = (() => {
   const TYPE_OPTIONS = ['업무', '홍보', '청소', '식사', '기타'];
 
   const RESV_STORAGE_KEY = 'promo.reservations';
-  const RESV_MAX = 10;
+  const RESV_MAX = 15;
 
   let activeSubTab = 'ops';
   let scheduleData = [];
@@ -411,7 +411,8 @@ const PromoTab = (() => {
   }
 
   function buildShareCalendarHTML(todayYMD, today) {
-    const SLOT_PX = 32;
+    // 이벤트 내용(제목 + 메모 2줄)이 잘리지 않도록 1시간 슬롯 = 44px로 확보
+    const SLOT_PX = 44;
     const totalPx = (CAL_END_H - CAL_START_H + 1) * SLOT_PX;
     // 시간 라벨 열
     let timeCol = `<div style="position:relative;width:58px;flex:none;border-right:1px solid #E5E7EB;height:${totalPx}px">`;
@@ -443,9 +444,9 @@ const PromoTab = (() => {
       const sType = s.type || '업무';
       const bg = s.color || TYPE_COLORS[sType] || TYPE_COLORS['업무'];
       const title = s.title || sType;
-      dayCol += `<div style="position:absolute;left:4px;right:4px;top:${top}px;height:${height}px;background:${bg};color:#fff;border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;overflow:hidden;box-sizing:border-box">
-        <div>${esc(title)}</div>
-        ${s.notes ? `<div style="font-size:10px;opacity:.9;margin-top:1px">${esc(s.notes)}</div>` : ''}
+      dayCol += `<div style="position:absolute;left:4px;right:4px;top:${top}px;height:${height}px;background:${bg};color:#fff;border-radius:4px;padding:4px 6px;font-size:11px;font-weight:600;overflow:hidden;box-sizing:border-box;line-height:1.2">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</div>
+        ${s.notes ? `<div style="font-size:10px;opacity:.9;margin-top:1px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.notes)}</div>` : ''}
       </div>`;
     });
     dayCol += `</div>`;
@@ -658,9 +659,11 @@ const PromoTab = (() => {
         <div class="resv-head">
           <div>예약일</div><div>시간</div><div>이름</div><div>연락처</div><div>내용</div><div style="text-align:center">상태</div><div></div>
         </div>
-        ${rows}
-        ${addRow}
-        ${atMax ? '<div class="resv-cap-note">※ 최대 10건까지 등록됩니다. 삭제 후 추가하세요.</div>' : ''}
+        <div class="resv-scroll">
+          ${rows}
+          ${addRow}
+        </div>
+        ${atMax ? '<div class="resv-cap-note">※ 최대 15건까지 등록됩니다. 삭제 후 추가하세요.</div>' : ''}
       </div>
     `;
     bindResvEvents();
