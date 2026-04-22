@@ -2701,7 +2701,37 @@ html, body {
 .spt-comment-colon  { color: var(--color-text-muted); }
 .spt-comment-content { color: var(--color-text-primary); }
 .spt-comment-edited { font-size: 10px; color: var(--color-text-muted); }
-.spt-comment-actions { flex-shrink: 0; }
+.spt-comment-actions { flex-shrink: 0; display: flex; gap: 4px; }
+.spt-comment-edit {
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-divider);
+}
+.spt-comment-edit-ta {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-divider);
+  border-radius: 6px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.spt-comment-edit-ta:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.spt-comment-edit-btns {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
 
 /* 상세 body (세션 + 설정) */
 .spt-card-body {

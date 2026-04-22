@@ -17,7 +17,7 @@
  *   - I5: veragym-app schedules 와 완전 분리.
  *   - I6: 디자인 토큰 재사용. 신규 클래스는 spt-* 필요 최소.
  *   - I7: spt_member_comments.member_id 변경 금지. 재배정 시 코멘트 건드리지 않음.
- *   - I8: spt_member_comments.trainer_name 변경 금지. 코멘트 수정/추가 UI 노출 X (트레이너 영역).
+ *   - I8: spt_member_comments.trainer_name 변경 금지. 추가는 트레이너 영역, 수정·삭제는 관리자만(모더레이션).
  */
 const SptTab = (() => {
   let allSummaries = [];              // spt_member_summary VIEW
@@ -868,13 +868,14 @@ const SptTab = (() => {
                 ${edited}
               </div>
               <div class="spt-comment-actions">
+                <button class="btn-action btn-spt-comment-edit" data-id="${escHtml(c.id)}">수정</button>
                 <button class="btn-action btn-spt-comment-del" data-id="${escHtml(c.id)}">삭제</button>
               </div>
             </div>
           `;
         }).join('')}
       </div>
-      <p class="spt-hint">※ 추가/수정은 트레이너 앱에서만. 여기서는 열람 + [삭제](moderation).</p>
+      <p class="spt-hint">※ 추가는 트레이너 앱에서만. 여기서는 열람 + 수정 + 삭제(모더레이션).</p>
     `;
 
     containerEl.querySelectorAll('.btn-spt-comment-del').forEach(btn => {
@@ -882,6 +883,56 @@ const SptTab = (() => {
         e.stopPropagation();
         deleteComment(btn.dataset.id, memberId, containerEl);
       });
+    });
+    containerEl.querySelectorAll('.btn-spt-comment-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCommentEditor(btn.dataset.id, memberId, containerEl);
+      });
+    });
+  }
+
+  // 관리자 모더레이션: 인라인 수정 — spt_comment_update RPC (admin bypass)
+  function openCommentEditor(commentId, memberId, containerEl) {
+    const row = containerEl.querySelector(`.spt-comment-item[data-id="${CSS.escape(commentId)}"]`);
+    if (!row) return;
+    if (row.querySelector('.spt-comment-edit')) return;
+
+    const contentEl = row.querySelector('.spt-comment-content');
+    const original = contentEl ? contentEl.textContent : '';
+
+    const editBox = document.createElement('div');
+    editBox.className = 'spt-comment-edit';
+    editBox.innerHTML = `
+      <textarea maxlength="2000" class="spt-comment-edit-ta"></textarea>
+      <div class="spt-comment-edit-btns">
+        <button type="button" class="btn btn-secondary btn-sm" data-action="cancel">취소</button>
+        <button type="button" class="btn btn-primary btn-sm" data-action="save">저장</button>
+      </div>
+    `;
+    row.appendChild(editBox);
+
+    const ta = editBox.querySelector('textarea');
+    ta.value = original;
+    ta.focus();
+
+    editBox.querySelector('[data-action="cancel"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      editBox.remove();
+    });
+    editBox.querySelector('[data-action="save"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const newContent = ta.value.trim();
+      if (!newContent) { Toast.error('내용을 입력해주세요'); return; }
+      if (newContent === original.trim()) { editBox.remove(); return; }
+      const { data, error } = await supabase.rpc('spt_comment_update', {
+        p_comment_id: commentId,
+        p_content: newContent
+      });
+      if (error) { Toast.error('수정 실패: ' + error.message); return; }
+      if (!data?.ok) { Toast.error('수정 실패: ' + (data?.error || '알 수 없음')); return; }
+      Toast.success('코멘트가 수정되었습니다.');
+      await refreshAfterChange(memberId, { keepCommentsOpen: true });
     });
   }
 
