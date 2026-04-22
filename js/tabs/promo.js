@@ -6,7 +6,7 @@
  *   - 좌 2/5: 일정표 (오늘/내일 2일 · 30분 · staff_schedules)
  *     + [시간표 공유] 버튼 — html2canvas로 PNG 다운로드
  *   - 우 3/5:
- *       · 예약자 리스트 (최대 10개 · sessionStorage · inquiries 자동완성)
+ *       · 예약자 리스트 (최대 20개 · sessionStorage · inquiries 자동완성)
  *         ※ 일회성 데이터 — DB에 절대 쓰지 않음. 문의관리에 영향 없음.
  *       · 예정 업무 리스트
  */
@@ -19,7 +19,7 @@ const PromoTab = (() => {
   const TYPE_OPTIONS = ['업무', '홍보', '청소', '식사', '기타'];
 
   const RESV_STORAGE_KEY = 'promo.reservations';
-  const RESV_MAX = 15;
+  const RESV_MAX = 20;
 
   let activeSubTab = 'ops';
   let scheduleData = [];
@@ -85,7 +85,7 @@ const PromoTab = (() => {
           <div class="ops-panel ops-panel-resv">
             <div class="ops-panel-header">
               <span class="ops-panel-title">예약자 리스트</span>
-              <span style="font-size:11px;color:var(--color-text-muted)">일회성 · 최대 10개 · 새로고침 후에도 창 닫기 전까지 유지</span>
+              <span style="font-size:11px;color:var(--color-text-muted)">일회성 · 최대 20개 · 새로고침 후에도 창 닫기 전까지 유지</span>
             </div>
             <div class="ops-panel-body" id="resvListBody"></div>
           </div>
@@ -663,7 +663,7 @@ const PromoTab = (() => {
           ${rows}
           ${addRow}
         </div>
-        ${atMax ? '<div class="resv-cap-note">※ 최대 15건까지 등록됩니다. 삭제 후 추가하세요.</div>' : ''}
+        ${atMax ? '<div class="resv-cap-note">※ 최대 20건까지 등록됩니다. 삭제 후 추가하세요.</div>' : ''}
       </div>
     `;
     bindResvEvents();
