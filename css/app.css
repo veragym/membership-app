@@ -3246,9 +3246,9 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-/* 1~5행 기본 노출, 6~15행은 스크롤 */
+/* 5행 고정 노출 (항상 5행 높이 유지, 6행 이상은 스크롤) */
 .resv-scroll {
-  max-height: 215px; /* 5행 × 39px + add row + padding 여유 */
+  height: 215px; /* 5행 × 39px + add row + padding 여유 */
   overflow-y: auto;
   overflow-x: visible;
 }
