@@ -2883,7 +2883,17 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+.ops-bottom-row > .ops-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ops-bottom-row > .ops-panel > .ops-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 @media (max-width: 1100px) {
   .ops-bottom-row { grid-template-columns: 1fr; }
