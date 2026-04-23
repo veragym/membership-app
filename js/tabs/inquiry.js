@@ -319,6 +319,7 @@ const InquiryTab = (() => {
           <button class="btn-action btn-tm">TM</button>
           ${inq.status === 'unregistered' ? '<button class="btn-action btn-register">+등록</button>' : ''}
           ${inq.status === 'registered' ? '<button class="btn-action btn-pt">+PT</button>' : ''}
+          <button class="btn-action btn-delete" title="문의 삭제">삭제</button>
         </div>`;
 
     // 등록 정보 6셀 — 미등록이면 모두 "-"
@@ -367,6 +368,11 @@ const InquiryTab = (() => {
       const ptBtn = row.querySelector('.btn-pt');
       if (ptBtn) ptBtn.addEventListener('click', () => {
         if (typeof PtTab !== 'undefined') PtTab.openPtForm({ name: inq.name, phone: inq.phone });
+      });
+      const delBtn = row.querySelector('.btn-delete');
+      if (delBtn) delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteInquiry(inq);
       });
     }
 
@@ -929,6 +935,48 @@ const InquiryTab = (() => {
     // total_payment은 DB GENERATED 컬럼이라 override 불가 — cash/card가 이미 RPC로 저장됐으므로 자동 합산됨
     Toast.success('회원권 등록 완료');
     Modal.close();
+    await loadInquiries();
+  }
+
+  // ────────── 문의 삭제 (cascade) ──────────
+  // RPC admin_delete_inquiry_cascade: pt_registrations → registrations → inquiries 순 삭제 (트랜잭션)
+  // tm_logs는 FK CASCADE로 자동 삭제
+  async function deleteInquiry(inq) {
+    const hasReg = inq.registration && inq.status === 'registered';
+    const warn = hasReg
+      ? `[경고] 이 문의에는 회원권 등록 정보가 있습니다.\n\n- 문의\n- 등록(결제) 내역\n- 이 등록에 딸린 PT 레코드\n- TM 로그\n\n위 항목이 모두 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.\n\n정말 삭제하시겠습니까? (${inq.name || ''})`
+      : `[확인] 이 문의를 삭제합니다.\n\n- 문의\n- TM 로그\n\n이 작업은 되돌릴 수 없습니다.\n\n정말 삭제하시겠습니까? (${inq.name || ''})`;
+
+    if (!confirm(warn)) return;
+
+    // 한 번 더 확인 (등록된 문의에 한해)
+    if (hasReg) {
+      const name = inq.name || '';
+      const typed = prompt(`최종 확인: 삭제를 진행하려면 회원 이름 "${name}"을 정확히 입력하세요.`);
+      if (typed !== name) {
+        Toast.info('이름이 일치하지 않아 취소되었습니다.');
+        return;
+      }
+    }
+
+    const { data, error } = await supabase.rpc('admin_delete_inquiry_cascade', {
+      p_inquiry_id: inq.id
+    });
+    if (error) {
+      Toast.error('삭제 실패: ' + error.message);
+      return;
+    }
+    if (!data || data.ok !== true) {
+      const msg = data?.error || 'unknown';
+      Toast.error('삭제 실패: ' + msg);
+      return;
+    }
+    const ptDel = data.pt_deleted || 0;
+    Toast.success(
+      data.had_registration
+        ? `문의 삭제됨 (등록 정보${ptDel ? ` + PT ${ptDel}건` : ''} 함께 삭제)`
+        : '문의 삭제됨'
+    );
     await loadInquiries();
   }
 

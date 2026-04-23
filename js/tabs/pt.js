@@ -163,6 +163,7 @@ const PtTab = (() => {
                 ? `<button class="btn-action btn-sync-done" data-id="${r.id}" title="이미 동기화됨">동기화 완료</button>`
                 : `<button class="btn-action btn-retry" data-id="${r.id}">동기화</button>`}
               <button class="btn-action btn-edit" data-id="${r.id}">수정</button>
+              <button class="btn-action btn-delete" data-id="${r.id}" title="PT 등록 삭제">삭제</button>
             </div>
           </div>
         </div>
@@ -210,6 +211,34 @@ const PtTab = (() => {
         if (rec) openPtForm(null, rec);
       });
     });
+
+    // 삭제 버튼 바인딩
+    listEl.querySelectorAll('.btn-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rec = allPtRegs.find(r => r.id === btn.dataset.id);
+        if (rec) deletePt(rec);
+      });
+    });
+  }
+
+  // ────────── PT 등록 삭제 ──────────
+  async function deletePt(rec) {
+    const label = `${rec.name || ''} / ${rec.phone || ''} / ${rec.pt_count || 0}회`;
+    if (!confirm(`[확인] PT 등록을 삭제합니다.\n\n${label}\n\n이 작업은 되돌릴 수 없습니다.\n정말 삭제하시겠습니까?`)) return;
+
+    const { data, error } = await supabase.rpc('admin_delete_pt_registration', {
+      p_pt_id: rec.id
+    });
+    if (error) {
+      Toast.error('삭제 실패: ' + error.message);
+      return;
+    }
+    if (!data || data.ok !== true) {
+      Toast.error('삭제 실패: ' + (data?.error || 'unknown'));
+      return;
+    }
+    Toast.success('PT 등록 삭제됨');
+    await loadPtRegistrations();
   }
 
   async function retrySync(ptRegId) {

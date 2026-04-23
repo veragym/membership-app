@@ -948,6 +948,7 @@ html, body {
     overflow: visible;
     display: flex;
     gap: 4px;
+    flex-wrap: wrap;
     justify-content: center;
   }
   .inquiry-card-main .col-actions .btn-action {
@@ -1381,6 +1382,17 @@ html, body {
   background: #a7f3d0;
   color: #065f46;
   border-color: #6ee7b7;
+}
+/* 삭제 버튼 — 빨간 강조 (호버 시 더 진하게) */
+.btn-action.btn-delete {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff;
+}
+.btn-action.btn-delete:hover {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-color: #f87171;
 }
 
 /* Accordion — 과거 문의 */
