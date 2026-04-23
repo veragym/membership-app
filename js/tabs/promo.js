@@ -37,6 +37,7 @@ const PromoTab = (() => {
     pane.innerHTML = `
       <div class="stats-subtab-bar">
         <button class="stats-subtab ${activeSubTab === 'ops' ? 'active' : ''}" data-tab="ops">업무관리</button>
+        <button class="stats-subtab ${activeSubTab === 'plan' ? 'active' : ''}" data-tab="plan">업무계획</button>
         <button class="stats-subtab ${activeSubTab === 'promo' ? 'active' : ''}" data-tab="promo">홍보관리</button>
         <button class="stats-subtab ${activeSubTab === 'center' ? 'active' : ''}" data-tab="center">센터관리</button>
         <button class="stats-subtab ${activeSubTab === 'manual' ? 'active' : ''}" data-tab="manual">메뉴얼생성</button>
@@ -55,9 +56,19 @@ const PromoTab = (() => {
   function loadSubTab(tab) {
     const c = document.getElementById('promo-content');
     if (tab === 'ops') renderOps(c);
+    else if (tab === 'plan') renderPlan(c);
     else if (tab === 'promo') renderPromo(c);
     else if (tab === 'center') renderCenter(c);
     else if (tab === 'manual') renderManual(c);
+  }
+
+  // ───────── 업무계획 (월간 달력 + 체크리스트 풀) ─────────
+  function renderPlan(container) {
+    if (typeof PromoCalendarTab !== 'undefined' && PromoCalendarTab.render) {
+      PromoCalendarTab.render(container);
+    } else {
+      container.innerHTML = `<div class="ops-placeholder">업무계획 모듈 로드 실패 — 새로고침 후 재시도</div>`;
+    }
   }
 
   // ───────── 업무관리 ─────────
@@ -91,7 +102,7 @@ const PromoTab = (() => {
           </div>
           <div class="ops-panel">
             <div class="ops-panel-header">
-              <span class="ops-panel-title">예정 업무 (오늘 이후)</span>
+              <span class="ops-panel-title">시간 일정 (오늘 이후)</span>
               <div class="ops-upcoming-actions">
                 <button type="button" class="btn-upcoming-action" id="btnUpcomingDelSelected" disabled>선택삭제</button>
                 <button type="button" class="btn-upcoming-action btn-upcoming-danger" id="btnUpcomingDelAll">전체삭제</button>
@@ -138,7 +149,7 @@ const PromoTab = (() => {
     const from = toYMD(dates[0]), to = toYMD(dates[dates.length - 1]);
     const { data, error } = await supabase
       .from('staff_schedules')
-      .select('id, staff_id, sched_date, start_time, end_time, type, title, notes, color, status')
+      .select('id, staff_id, sched_date, start_time, end_time, type, title, notes, color, status, task_item_id')
       .gte('sched_date', from).lte('sched_date', to)
       .neq('status', 'cancelled')
       .order('sched_date').order('start_time');
@@ -597,6 +608,7 @@ const PromoTab = (() => {
     const typeVal = isEdit ? row.type : '업무';
     const titleVal = isEdit ? (row.title || '') : '';
     const notesVal = isEdit ? (row.notes || '') : '';
+    const taskItemIdVal = isEdit ? (row.task_item_id || '') : '';
 
     Modal.open({
       type: 'center', size: 'md',
@@ -618,6 +630,12 @@ const PromoTab = (() => {
             <div class="form-row"><label>날짜</label><input type="date" name="sched_date" value="${dateVal}" required></div>
             <div class="form-row"><label>시작</label><input type="time" name="start_time" value="${startVal}" step="1800" required></div>
             <div class="form-row"><label>종료</label><input type="time" name="end_time" value="${endVal}" step="1800"></div>
+          </div>
+          <div class="form-row">
+            <label>연결 체크리스트</label>
+            <select name="task_item_id" id="schedTaskItemSelect">
+              <option value="">선택 없음 (불러오는 중…)</option>
+            </select>
           </div>
           <div class="form-row">
             <label>메모</label>
@@ -643,8 +661,39 @@ const PromoTab = (() => {
           e.preventDefault();
           handleSchedSubmit(e.target, isEdit ? row.id : null);
         });
+
+        // 연결 체크리스트 옵션 로드 (미완료 TaskItem — 수정 모드면 현재 선택 항목도 포함)
+        loadTaskItemOptions(el.querySelector('#schedTaskItemSelect'), taskItemIdVal, isEdit ? row : null);
       }
     });
+  }
+
+  // 미완료 task_items 옵션 로드 — PromoCalendarTab.fetchOpenTaskItems 재사용
+  async function loadTaskItemOptions(selectEl, currentId, editRow) {
+    if (!selectEl) return;
+    try {
+      let options = [];
+      if (typeof PromoCalendarTab !== 'undefined' && PromoCalendarTab.fetchOpenTaskItems) {
+        options = await PromoCalendarTab.fetchOpenTaskItems();
+      }
+      // 현재 row에 연결된 항목이 이미 완료 상태라 목록에 없을 수 있음 → 별도 fetch
+      if (currentId && !options.find(o => o.id === currentId)) {
+        const { data } = await supabase
+          .from('task_items')
+          .select('id, content, tasks(title)')
+          .eq('id', currentId)
+          .single();
+        if (data && data.tasks) {
+          options.unshift({ id: data.id, label: `${data.tasks.title} · ${data.content} (완료됨)` });
+        }
+      }
+      const opts = ['<option value="">선택 없음</option>']
+        .concat(options.map(o => `<option value="${o.id}" ${o.id === currentId ? 'selected' : ''}>${esc(o.label)}</option>`));
+      selectEl.innerHTML = opts.join('');
+    } catch (e) {
+      console.error('loadTaskItemOptions failed:', e);
+      selectEl.innerHTML = '<option value="">선택 없음</option>';
+    }
   }
 
   function addMinutes(hhmm, mins) {
@@ -669,6 +718,7 @@ const PromoTab = (() => {
       title: (fd.get('title') || '').trim() || null,
       notes: (fd.get('notes') || '').trim() || null,
       color: TYPE_COLORS[fd.get('type')] || TYPE_COLORS['업무'],
+      task_item_id: fd.get('task_item_id') || null,
     };
     if (!payload.sched_date || !payload.start_time) { Toast.error('날짜와 시작 시각은 필수입니다.'); return; }
     if (payload.end_time && payload.end_time <= payload.start_time) { Toast.error('종료 시각이 시작보다 늦어야 합니다.'); return; }

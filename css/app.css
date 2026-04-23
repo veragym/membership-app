@@ -3665,3 +3665,522 @@ html, body {
   padding: 0 12px;
   font-size: 13px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   업무계획 서브탭 — 월간 달력 + 체크리스트 풀 (promo-calendar.js)
+   ══════════════════════════════════════════════════════════════════════ */
+.plan-root {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.plan-root > .plan-cal-section { min-width: 0; }  /* grid cell overflow 방지 */
+.plan-root > .plan-pool-section {
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── 업무 등록/수정 모달 폼 ─── */
+.plan-task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+}
+.plan-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan-form-row > label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+.plan-form-grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.plan-task-form input[type=text],
+.plan-task-form input[type=date],
+.plan-task-form select,
+.plan-task-form textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--color-bg-1);
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+.plan-task-form input:focus,
+.plan-task-form select:focus,
+.plan-task-form textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.plan-task-form textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+.plan-task-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+.plan-task-actions .btn-danger { margin-right: auto; }  /* 삭제는 좌측 */
+
+/* ─── 상단: 월간 달력 ─── */
+.plan-cal-section {
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+.plan-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.plan-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-cal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  min-width: 120px;
+  text-align: center;
+}
+.plan-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  transition: background .12s;
+}
+.plan-btn-ghost:hover { background: var(--color-bg-2); }
+.plan-btn-sm {
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  transition: background .12s;
+}
+.plan-btn-sm:hover { background: var(--color-border); }
+.plan-btn-primary {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s;
+}
+.plan-btn-primary:hover { background: var(--color-primary-dark); }
+
+.plan-cal-grid {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-bg-1);
+}
+.plan-cal-weekhdr {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: var(--color-bg-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.plan-cal-wkcell {
+  padding: 8px 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.plan-cal-wkcell.sun { color: #EF4444; }
+.plan-cal-wkcell.sat { color: #3B82F6; }
+
+.plan-cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--color-border);
+  position: relative;
+  min-height: 96px;
+}
+.plan-cal-week:last-child { border-bottom: none; }
+.plan-cal-cell {
+  border-right: 1px solid var(--color-border);
+  padding: 4px;
+  cursor: pointer;
+  position: relative;
+  min-height: 96px;
+  background: var(--color-bg-1);
+  transition: background .12s;
+}
+.plan-cal-cell:last-child { border-right: none; }
+.plan-cal-cell:hover { background: var(--color-bg-2); }
+.plan-cal-cell.out-of-month { background: #FAFAFA; color: var(--color-text-muted); }
+.plan-cal-cell.out-of-month .plan-cal-daynum { color: var(--color-text-muted); }
+.plan-cal-cell.today { background: var(--color-primary-bg); }
+.plan-cal-cell.today .plan-cal-daynum {
+  color: var(--color-primary);
+  font-weight: 800;
+}
+.plan-cal-daynum {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding: 2px 4px;
+}
+.plan-cal-cell.sun .plan-cal-daynum { color: #EF4444; }
+.plan-cal-cell.sat .plan-cal-daynum { color: #3B82F6; }
+
+.plan-cal-baroverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.plan-task-bar {
+  position: absolute;
+  height: 18px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  transition: transform .1s, filter .1s;
+}
+.plan-task-bar:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.plan-task-bar-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 2;
+  position: relative;
+}
+
+.plan-cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 2px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.plan-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.plan-legend-chip i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/* ─── 하단: 체크리스트 풀 ─── */
+.plan-pool-section {
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.plan-pool-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.plan-pool-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.plan-pool-filter {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.plan-filter-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all .12s;
+  white-space: nowrap;
+}
+.plan-filter-btn:hover { background: var(--color-bg-2); }
+.plan-filter-btn.active {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  border-color: var(--color-primary);
+}
+.plan-pool-body { padding: 8px 0; flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.plan-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.plan-pool-group { border-bottom: 1px solid var(--color-divider); }
+.plan-pool-group:last-child { border-bottom: none; }
+.plan-pool-group-hdr {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px 8px 4px;
+  background: var(--color-bg-2);
+  transition: background .12s;
+}
+.plan-pool-group-hdr:hover { background: var(--color-border); }
+.plan-pool-toggle {
+  flex: 0 0 32px;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0;
+  line-height: 1;
+  transition: all .12s;
+}
+.plan-pool-toggle:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.plan-pool-group-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.plan-pool-group-line1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-pool-group-line2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.plan-pool-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+.plan-pool-group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plan-pool-group-title:hover { text-decoration: underline; }
+.plan-pool-group-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding: 2px 6px;
+  background: var(--color-bg-1);
+  border-radius: var(--radius-pill);
+}
+.plan-pool-done-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #10B981;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  letter-spacing: .02em;
+}
+.plan-pool-group-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.plan-pool-group.is-complete .plan-pool-group-hdr {
+  background: rgba(16,185,129,.08);
+}
+.plan-pool-group.is-complete .plan-pool-group-title {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(100,100,100,.5);
+}
+.plan-pool-items {
+  display: flex;
+  flex-direction: column;
+}
+.plan-pool-items[hidden] { display: none; }
+.plan-pool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.plan-pool-item:hover { background: var(--color-bg-2); }
+.plan-pool-check {
+  width: 16px;
+  height: 16px;
+  accent-color: #555;
+  cursor: pointer;
+}
+.plan-pool-item-text {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex: 1;
+}
+.plan-pool-item.is-done .plan-pool-item-text {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+/* ─── Task 편집 모달 내부 체크리스트 에디터 ─── */
+.plan-task-form .form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.plan-items-editor {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.plan-items-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+.plan-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: opacity .12s, border-color .12s;
+}
+.plan-item-row.dragging { opacity: .4; }
+.plan-item-row.drag-over { border-color: var(--color-primary); border-style: dashed; }
+.plan-item-handle {
+  cursor: grab;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+  user-select: none;
+  font-size: 16px;
+}
+.plan-item-handle:active { cursor: grabbing; }
+.plan-item-done {
+  display: inline-flex;
+  align-items: center;
+}
+.plan-item-done input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.plan-item-row input[type=text] {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  outline: none;
+  padding: 4px 2px;
+}
+.plan-item-row input[type=text]:focus {
+  background: var(--color-bg-2);
+  border-radius: 4px;
+}
+.plan-item-del {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: all .12s;
+}
+.plan-item-del:hover { background: var(--color-danger); color: #fff; }
+
+.plan-task-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
+/* ─── 반응형 ─── */
+@media (max-width: 768px) {
+  .plan-cal-week, .plan-cal-cell { min-height: 70px; }
+  .plan-cal-cell { padding: 2px; }
+  .plan-task-bar { height: 14px; font-size: 10px; padding: 0 3px; }
+  .plan-task-form .form-row-2 { grid-template-columns: 1fr; }
+  .plan-cal-header { flex-direction: column; align-items: stretch; }
+  .plan-cal-nav { justify-content: center; }
+}
