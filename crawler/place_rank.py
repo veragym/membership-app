@@ -233,38 +233,57 @@ async def click_next_page(frame) -> tuple[bool, str | None]:
     clicked_sel = await frame.evaluate(
         """
         () => {
-          const selectors = [
-            'a[aria-label="다음페이지"]:not([aria-disabled="true"])',
-            'button[aria-label="다음페이지"]:not([disabled])',
-            'a[aria-label="다음 페이지"]:not([aria-disabled="true"])',
-            'button[aria-label="다음 페이지"]:not([disabled])',
-            // 네이버 지도 특유 클래스들 (자주 바뀜)
-            'a.mBN2s:not(.qxokY)',           // 페이지 번호 링크 중 비활성 아닌 것
-            'a.eUTV2:not(.qxokY)',           // 다음 화살표 (관찰된 패턴)
-            'a[class*="next" i]:not([aria-disabled="true"])',
-            'button[class*="next" i]:not([disabled])',
-          ];
-          // 현재 활성 페이지(.qxokY 또는 .on 또는 aria-current="true") 다음 번호로 이동
-          // 우선 명시적 '다음' 버튼 시도 후 실패하면 활성 페이지 다음 번호 클릭
-          for (const sel of selectors) {
-            const els = document.querySelectorAll(sel);
-            for (const el of els) {
-              if (el.offsetParent === null) continue;
-              if (el.getAttribute('aria-disabled') === 'true') continue;
-              const rect = el.getBoundingClientRect();
-              if (rect.width === 0 || rect.height === 0) continue;
+          const isClickable = (el) => {
+            if (!el || el.offsetParent === null) return false;
+            if (el.getAttribute('aria-disabled') === 'true') return false;
+            const cls = (el.className || '').toString();
+            if (cls.includes('disabled') || cls.includes('qxokY')) return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          };
+
+          // [1순위] aria-label 또는 innerText가 '다음페이지'인 <a>/<button>
+          // 로그 검증: <A class='eUTV2' text='다음페이지'>가 유일한 명시적 '다음' 링크
+          const candidates = Array.from(document.querySelectorAll('a, button'));
+          for (const el of candidates) {
+            const aria = el.getAttribute('aria-label') || '';
+            const text = (el.innerText || '').trim();
+            if (aria === '다음페이지' || aria === '다음 페이지' ||
+                text === '다음페이지' || text === '다음 페이지') {
+              if (!isClickable(el)) continue;
               el.scrollIntoView({block: 'center'});
               el.click();
-              return sel;
+              return 'next-by-text-or-aria';
             }
           }
-          // fallback: 활성 페이지 번호의 다음 형제 <a>
+
+          // [2순위] 활성 페이지 번호(.qxokY) 읽고 +1 번호에 해당하는 <a> 클릭
           const active = document.querySelector('a.qxokY, a[aria-current="true"], a.on');
-          if (active && active.nextElementSibling && active.nextElementSibling.tagName === 'A') {
-            active.nextElementSibling.scrollIntoView({block: 'center'});
-            active.nextElementSibling.click();
-            return 'active-next-sibling';
+          if (active) {
+            const curNum = parseInt((active.innerText || '').trim(), 10);
+            if (!isNaN(curNum)) {
+              const parent = active.parentElement;
+              if (parent) {
+                const sibs = Array.from(parent.querySelectorAll('a'));
+                for (const a of sibs) {
+                  if (parseInt((a.innerText || '').trim(), 10) === curNum + 1) {
+                    if (!isClickable(a)) continue;
+                    a.scrollIntoView({block: 'center'});
+                    a.click();
+                    return `page-num-${curNum + 1}`;
+                  }
+                }
+              }
+            }
+            // 활성 페이지 바로 다음 형제
+            const nxt = active.nextElementSibling;
+            if (nxt && nxt.tagName === 'A' && isClickable(nxt)) {
+              nxt.scrollIntoView({block: 'center'});
+              nxt.click();
+              return 'active-next-sibling';
+            }
           }
+
           return null;
         }
         """
@@ -389,7 +408,7 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
 
     all_cards: list[dict] = []
     seen_names: set[str] = set()
-    MAX_PAGES = 5
+    MAX_PAGES = 6
 
     async def scroll_iframe_to_bottom():
         """iframe 내부 스크롤 컨테이너를 끝까지 스크롤 (무한 로드 유도)."""
