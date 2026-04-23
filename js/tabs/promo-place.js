@@ -58,7 +58,7 @@ const PromoPlaceTab = (() => {
               <div class="place-rank-empty">불러오는 중…</div>
             </div>
             <div class="place-rank-hint">
-              · 주소에 <b>미사</b> 포함 → 미사점, <b>동탄</b> 포함 → 동탄점으로 자동 분류<br>
+              · 주소에 <b>미사</b> 포함 → 미사점으로 자동 분류<br>
               · 자동 조회: 2시간마다 · 1~5페이지 순회
             </div>
           </aside>
@@ -228,7 +228,7 @@ const PromoPlaceTab = (() => {
       `;
     };
 
-    body.innerHTML = renderSection('misa') + renderSection('dongtan');
+    body.innerHTML = renderSection('misa');
   }
 
   function buildRankCard(kw, row, branch, rowNull) {
