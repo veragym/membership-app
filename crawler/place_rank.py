@@ -365,25 +365,77 @@ async def debug_dump_pagination(page, keyword: str):
         print(f"  {i+1}. <{c['tag']}> class='{c['class']}' text='{c['text']}' aria='{c['aria']}' visible={c['visible']}")
 
 
-async def _get_search_frame(page, timeout_ms: int = 15000):
-    """map.naver.com #searchIframe 로드 대기 후 Frame 객체 반환."""
+async def _get_search_frame(page, timeout_ms: int = 30000):
+    """map.naver.com #searchIframe 로드 대기 후 Frame 객체 반환.
+
+    Cold start 내성:
+      - 첫 키워드는 브라우저 initial load 비용이 커서 iframe 자체 등장까지 시간 걸림
+      - iframe 엘리먼트가 보이면 li가 아직 없어도 프레임 반환 (caller가 추가 대기)
+    """
     deadline = asyncio.get_event_loop().time() + (timeout_ms / 1000)
+    frame_seen_at = None
     while asyncio.get_event_loop().time() < deadline:
         try:
             el = await page.query_selector('iframe#searchIframe')
             if el:
                 frame = await el.content_frame()
                 if frame:
-                    # 프레임 내부에 li 렌더링 시작됐는지 가볍게 체크
+                    if frame_seen_at is None:
+                        frame_seen_at = asyncio.get_event_loop().time()
+                    # 프레임 내부에 li 렌더링 시작됐는지 체크
                     try:
-                        await frame.wait_for_selector('ul li', timeout=2000)
+                        await frame.wait_for_selector('ul li', timeout=3000)
                         return frame
                     except Exception:
                         pass
+                    # iframe은 있는데 li가 오래도록 안 뜸 → 그래도 프레임 반환
+                    if asyncio.get_event_loop().time() - frame_seen_at > 12:
+                        print("[_get_search_frame] iframe present but no li for 12s — returning frame anyway")
+                        return frame
         except Exception:
             pass
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.4)
     return None
+
+
+async def debug_dump_ad_markers(frame, keyword: str):
+    """첫 li 3개의 em/span/i 텍스트를 덤프 — 광고 마커 DOM 구조 발굴용.
+
+    한 번만 찍고 말 것 (page1에서만 호출).
+    """
+    info = await frame.evaluate(
+        """
+        () => {
+          const items = Array.from(document.querySelectorAll('li.VLTHu, li.UEzoS, li[data-id]')).slice(0, 4);
+          return items.map((li, idx) => ({
+            idx,
+            outerHead: (li.outerHTML || '').slice(0, 400),
+            spans: Array.from(li.querySelectorAll('em, span, i, ins, strong, b, div')).slice(0, 25).map(s => ({
+              tag: s.tagName,
+              cls: (s.className || '').toString().slice(0, 50),
+              text: (s.textContent || '').trim().slice(0, 30),
+              aria: s.getAttribute('aria-label') || '',
+            })).filter(s => s.text && s.text.length > 0),
+          }));
+        }
+        """
+    )
+    print(f"[{keyword}] AD-MARKER dump ({len(info)} li inspected):")
+    for r in info:
+        print(f"  li[{r['idx']}] head={r['outerHead'][:120]}")
+        for s in r['spans']:
+            txt = s['text']
+            # 광고 의심 후보 하이라이트
+            flag = " <<< AD?" if ('광고' in txt or txt.lower() == 'ad') else ""
+            print(f"    <{s['tag']}> cls='{s['cls']}' text='{txt}' aria='{s['aria']}'{flag}")
+
+
+def is_target_name(name: str) -> bool:
+    """베라짐 이름 매칭. 지도 등록명 변형 대응 (공백/영문)."""
+    if not name:
+        return False
+    n = name.lower().replace(' ', '').replace('-', '')
+    return any(t in n for t in ['베라짐', 'veragym', 'vera짐'])
 
 
 async def scroll_and_collect(page, keyword: str) -> list[dict]:
@@ -399,12 +451,15 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
     """
     url = f"https://map.naver.com/p/search/{keyword}?searchType=place"
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    await asyncio.sleep(random.uniform(2.0, 3.0))
+    # 첫 키워드 cold start 대응 — 좀 더 여유 있게 대기
+    await asyncio.sleep(random.uniform(3.5, 5.0))
 
-    frame = await _get_search_frame(page, timeout_ms=15000)
+    frame = await _get_search_frame(page, timeout_ms=30000)
     if not frame:
         print(f"[{keyword}] #searchIframe not found — skip")
         return []
+    # iframe 찾은 직후에도 조금 더 안정화 시간
+    await asyncio.sleep(random.uniform(1.0, 1.8))
 
     all_cards: list[dict] = []
     seen_names: set[str] = set()
@@ -470,6 +525,7 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
         if page_num == 1:
             await debug_dump_pagination(frame, keyword)
             await debug_dump_cards(frame, keyword, label="page1")
+            await debug_dump_ad_markers(frame, keyword)
 
         if page_num >= MAX_PAGES:
             break
@@ -513,6 +569,30 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
         organic_cards = total_cards - ad_cards
         print(f"[{keyword}] collected={total_cards} (organic={organic_cards}, ads={ad_cards})")
 
+        # 수집 이름 상위 20개 덤프 (베라짐 어디 있는지 사용자 확인용)
+        print(f"[{keyword}] collected names (first 20):")
+        for i, c in enumerate(cards[:20], start=1):
+            ad_mark = " [AD]" if c.get("is_ad") else ""
+            nm = (c.get("name") or "")[:40]
+            ad_preview = (c.get("address") or "")[:30]
+            print(f"  {i:3d}. {nm}{ad_mark} | {ad_preview}")
+        if total_cards > 20:
+            print(f"  ... ({total_cards - 20} more)")
+
+        # 베라/vera/veragym 부분 포함 후보 전체 나열
+        veragym_candidates = [
+            (i, c) for i, c in enumerate(cards, start=1)
+            if ('베라' in (c.get('name') or ''))
+            or ('vera' in (c.get('name') or '').lower())
+            or ('veragym' in (c.get('name') or '').lower().replace(' ', ''))
+        ]
+        if veragym_candidates:
+            print(f"[{keyword}] 베라/vera 후보 {len(veragym_candidates)}개:")
+            for pos, c in veragym_candidates:
+                print(f"  pos={pos} name='{c.get('name')}' addr='{c.get('address')}' ad={c.get('is_ad')}")
+        else:
+            print(f"[{keyword}] 베라/vera 후보 없음 (수집된 {total_cards}개 중)")
+
         # 광고 제외 순위 매김
         organic_idx = 0
         for card in cards:
@@ -521,7 +601,7 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
             organic_idx += 1
             name = card.get("name", "")
             address = card.get("address", "")
-            if TARGET_NAME in name:
+            if is_target_name(name):
                 branch = detect_branch(address) or detect_branch(name)
                 if branch in found_by_branch:
                     continue  # 이미 기록
