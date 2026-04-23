@@ -2918,6 +2918,8 @@ html, body {
 .ops-panel-resv { overflow: visible; }
 .ops-panel-header {
   padding: 12px 14px;
+  min-height: 49px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
