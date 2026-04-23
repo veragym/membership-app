@@ -18,9 +18,11 @@ const StatsTab = (() => {
   let excludedProducts = new Set();
 
   // 담당자별 통계 패널 상태
-  let staffType = 'fc';       // 'fc' | 'pt'
-  let staffFilter = 'sales';  // 'sales' | 'contract'
-  let staffMonth = '';
+  let staffType = 'fc';         // 'fc' | 'pt'
+  let staffFilter = 'sales';    // 'sales' | 'contract'
+  let staffPeriodType = 'month'; // 'month'|'quarter'|'half'|'year'|'all'
+  let staffPeriodYear = new Date().getFullYear();
+  let staffPeriodSub  = new Date().getMonth() + 1; // month:1-12 / quarter:1-4 / half:1-2
 
   function init() {
     const saved = localStorage.getItem(EXCLUDE_STORAGE_KEY);
@@ -83,10 +85,6 @@ const StatsTab = (() => {
     // 상품 목록 (제외 필터용)
     if (allProducts.length === 0) await loadProducts();
 
-    if (!staffMonth) {
-      staffMonth = `${y}-${String(m).padStart(2, '0')}`;
-    }
-
     container.innerHTML = `
       <div class="stats-filter-panel">
         <details class="stats-filter-details">
@@ -118,10 +116,22 @@ const StatsTab = (() => {
               <button class="stats-staff-tab ${staffType === 'pt' ? 'active' : ''}" data-type="pt">PT</button>
             </div>
             <div class="stats-staff-controls">
-              <input type="month" id="staffMonth" value="${staffMonth}" class="stats-staff-month-input">
-              <select id="staffFilter" class="stats-staff-filter-select" ${staffType === 'fc' ? 'style="display:none"' : ''}>
-                <option value="sales" ${staffFilter === 'sales' ? 'selected' : ''}>매출담당</option>
-                <option value="contract" ${staffFilter === 'contract' ? 'selected' : ''}>계약T</option>
+              <select id="staffPeriodType" class="stats-staff-select">
+                <option value="month"   ${staffPeriodType==='month'  ?'selected':''}>월별</option>
+                <option value="quarter" ${staffPeriodType==='quarter'?'selected':''}>분기</option>
+                <option value="half"    ${staffPeriodType==='half'   ?'selected':''}>반기</option>
+                <option value="year"    ${staffPeriodType==='year'   ?'selected':''}>연간</option>
+                <option value="all"     ${staffPeriodType==='all'    ?'selected':''}>전체기간</option>
+              </select>
+              <select id="staffPeriodYear" class="stats-staff-select" ${staffPeriodType==='all'?'style="display:none"':''}>
+                ${[2023,2024,2025,2026,2027].map(yr=>`<option value="${yr}"${staffPeriodYear===yr?' selected':''}>${yr}년</option>`).join('')}
+              </select>
+              <select id="staffPeriodSub" class="stats-staff-select" ${['year','all'].includes(staffPeriodType)?'style="display:none"':''}>
+                ${buildSubOptions()}
+              </select>
+              <select id="staffFilter" class="stats-staff-select" ${staffType==='fc'?'style="display:none"':''}>
+                <option value="sales"    ${staffFilter==='sales'   ?'selected':''}>매출담당</option>
+                <option value="contract" ${staffFilter==='contract'?'selected':''}>계약T</option>
               </select>
             </div>
           </div>
@@ -153,13 +163,39 @@ const StatsTab = (() => {
       btn.addEventListener('click', () => {
         staffType = btn.dataset.type;
         container.querySelectorAll('.stats-staff-tab').forEach(b => b.classList.toggle('active', b === btn));
-        const filterSel = container.querySelector('#staffFilter');
-        filterSel.style.display = staffType === 'fc' ? 'none' : '';
+        container.querySelector('#staffFilter').style.display = staffType === 'fc' ? 'none' : '';
         loadStaffData(container);
       });
     });
-    container.querySelector('#staffMonth').addEventListener('change', e => {
-      staffMonth = e.target.value;
+    container.querySelector('#staffPeriodType').addEventListener('change', e => {
+      staffPeriodType = e.target.value;
+      const yearSel = container.querySelector('#staffPeriodYear');
+      const subSel  = container.querySelector('#staffPeriodSub');
+      yearSel.style.display = staffPeriodType === 'all' ? 'none' : '';
+      if (['year','all'].includes(staffPeriodType)) {
+        subSel.style.display = 'none';
+      } else {
+        // 기간 타입 바뀔 때 sub 초기값 세팅
+        if (staffPeriodType === 'quarter') staffPeriodSub = Math.ceil((new Date().getMonth()+1)/3);
+        else if (staffPeriodType === 'half') staffPeriodSub = new Date().getMonth() < 6 ? 1 : 2;
+        else staffPeriodSub = new Date().getMonth() + 1;
+        subSel.innerHTML = buildSubOptions();
+        subSel.value = staffPeriodSub;
+        subSel.style.display = '';
+      }
+      loadStaffData(container);
+    });
+    container.querySelector('#staffPeriodYear').addEventListener('change', e => {
+      staffPeriodYear = +e.target.value;
+      const subSel = container.querySelector('#staffPeriodSub');
+      if (!['year','all'].includes(staffPeriodType)) {
+        subSel.innerHTML = buildSubOptions();
+        subSel.value = staffPeriodSub;
+      }
+      loadStaffData(container);
+    });
+    container.querySelector('#staffPeriodSub').addEventListener('change', e => {
+      staffPeriodSub = +e.target.value;
       loadStaffData(container);
     });
     container.querySelector('#staffFilter').addEventListener('change', e => {
@@ -169,15 +205,85 @@ const StatsTab = (() => {
     loadStaffData(container);
   }
 
+  function buildSubOptions() {
+    if (staffPeriodType === 'month')
+      return Array.from({length:12},(_,i)=>i+1)
+        .map(mo=>`<option value="${mo}"${staffPeriodSub===mo?' selected':''}>${mo}월</option>`).join('');
+    if (staffPeriodType === 'quarter')
+      return [1,2,3,4].map(q=>`<option value="${q}"${staffPeriodSub===q?' selected':''}>${q}분기</option>`).join('');
+    if (staffPeriodType === 'half')
+      return [1,2].map(h=>`<option value="${h}"${staffPeriodSub===h?' selected':''}>${h===1?'상반기':'하반기'}</option>`).join('');
+    return '';
+  }
+
+  function computeStaffPeriod() {
+    const today = new Date();
+    const todayISO = isoDate(today);
+    let fromDate, toDate;
+
+    if (staffPeriodType === 'month') {
+      fromDate = `${staffPeriodYear}-${String(staffPeriodSub).padStart(2,'0')}-01`;
+      toDate   = isoDate(new Date(staffPeriodYear, staffPeriodSub, 0));
+    } else if (staffPeriodType === 'quarter') {
+      const qs = (staffPeriodSub-1)*3+1, qe = staffPeriodSub*3;
+      fromDate = `${staffPeriodYear}-${String(qs).padStart(2,'0')}-01`;
+      toDate   = isoDate(new Date(staffPeriodYear, qe, 0));
+    } else if (staffPeriodType === 'half') {
+      const hs = staffPeriodSub===1?1:7, he = staffPeriodSub===1?6:12;
+      fromDate = `${staffPeriodYear}-${String(hs).padStart(2,'0')}-01`;
+      toDate   = isoDate(new Date(staffPeriodYear, he, 0));
+    } else if (staffPeriodType === 'year') {
+      fromDate = `${staffPeriodYear}-01-01`;
+      toDate   = `${staffPeriodYear}-12-31`;
+    } else { // all
+      fromDate = '2023-01-01';
+      toDate   = todayISO;
+    }
+
+    // toDate는 오늘을 초과할 수 없음
+    if (toDate > todayISO) toDate = todayISO;
+
+    // 실제 경과 개월 수 계산 (지나간 기간만)
+    const fromDt = new Date(fromDate);
+    const elapsedMonths = staffPeriodType === 'month' ? 1 : Math.max(1,
+      (today.getFullYear() - fromDt.getFullYear()) * 12
+      + today.getMonth() - fromDt.getMonth() + 1
+    );
+
+    return { fromDate, toDate, elapsedMonths, showAvg: staffPeriodType !== 'month' };
+  }
+
   async function loadStaffData(container) {
     const body = container.querySelector('#staffBody');
     if (!body) return;
     body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
-    const [sy, sm] = staffMonth.split('-');
-    const fromDate = `${sy}-${sm}-01`;
-    const toDate = isoDate(new Date(+sy, +sm, 0));
+    const { fromDate, toDate, elapsedMonths, showAvg } = computeStaffPeriod();
     const fmt = n => n.toLocaleString() + '원';
+
+    const renderTable = (headLabel, amtLabel, sorted, totalCount, total) => {
+      if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
+      const avgRow = showAvg ? `
+        <tr class="stats-staff-avg">
+          <td>월평균 <small>(÷${elapsedMonths}개월)</small></td>
+          <td>-</td>
+          <td class="stats-staff-amount">${fmt(Math.round(total/elapsedMonths))}</td>
+        </tr>` : '';
+      body.innerHTML = `
+        <table class="stats-staff-table">
+          <thead><tr><th>${headLabel}</th><th>건수</th><th>${amtLabel}</th></tr></thead>
+          <tbody>${sorted.map(([name,v])=>`
+            <tr>
+              <td>${escHtml(name)}</td>
+              <td class="stats-staff-count">${v.count}건</td>
+              <td class="stats-staff-amount">${fmt(v.amount)}</td>
+            </tr>`).join('')}</tbody>
+          <tfoot>
+            <tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr>
+            ${avgRow}
+          </tfoot>
+        </table>`;
+    };
 
     if (staffType === 'fc') {
       const { data } = await supabase.from('registrations')
@@ -191,20 +297,9 @@ const StatsTab = (() => {
         grouped[name].amount += Math.round((r.total_payment || 0) / 1.1);
         grouped[name].count++;
       });
-      const sorted = Object.entries(grouped).sort((a, b) => b[1].amount - a[1].amount);
-      if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
-      const total = sorted.reduce((s, [, v]) => s + v.amount, 0);
-      body.innerHTML = `
-        <table class="stats-staff-table">
-          <thead><tr><th>매출담당</th><th>건수</th><th>매출액</th></tr></thead>
-          <tbody>${sorted.map(([name, v]) => `
-            <tr>
-              <td>${escHtml(name)}</td>
-              <td class="stats-staff-count">${v.count}건</td>
-              <td class="stats-staff-amount">${fmt(v.amount)}</td>
-            </tr>`).join('')}</tbody>
-          <tfoot><tr><td>합계</td><td>${rows.length}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr></tfoot>
-        </table>`;
+      const sorted = Object.entries(grouped).sort((a,b) => b[1].amount - a[1].amount);
+      const total = sorted.reduce((s,[,v]) => s+v.amount, 0);
+      renderTable('매출담당', '매출액', sorted, rows.length, total);
     } else {
       const trainerKey = staffFilter === 'contract' ? 'contract_trainer' : 'assigned_trainer';
       const fkName = staffFilter === 'contract'
@@ -220,22 +315,11 @@ const StatsTab = (() => {
         grouped[name].amount += (r.contract_amount || 0);
         grouped[name].count++;
       });
-      const sorted = Object.entries(grouped).sort((a, b) => b[1].amount - a[1].amount);
-      if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
-      const total = sorted.reduce((s, [, v]) => s + v.amount, 0);
-      const totalCount = sorted.reduce((s, [, v]) => s + v.count, 0);
+      const sorted = Object.entries(grouped).sort((a,b) => b[1].amount - a[1].amount);
+      const total = sorted.reduce((s,[,v]) => s+v.amount, 0);
+      const totalCount = sorted.reduce((s,[,v]) => s+v.count, 0);
       const header = staffFilter === 'contract' ? '계약T' : '매출담당';
-      body.innerHTML = `
-        <table class="stats-staff-table">
-          <thead><tr><th>${header}</th><th>건수</th><th>계약금액</th></tr></thead>
-          <tbody>${sorted.map(([name, v]) => `
-            <tr>
-              <td>${escHtml(name)}</td>
-              <td class="stats-staff-count">${v.count}건</td>
-              <td class="stats-staff-amount">${fmt(v.amount)}</td>
-            </tr>`).join('')}</tbody>
-          <tfoot><tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr></tfoot>
-        </table>`;
+      renderTable(header, '계약금액', sorted, totalCount, total);
     }
   }
 
