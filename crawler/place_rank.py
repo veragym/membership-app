@@ -122,114 +122,170 @@ def detect_branch(address: str) -> str | None:
     return positions[0][1]
 
 
-async def scroll_and_collect(page, keyword: str) -> list[dict]:
-    """m.search.naver.com 통합검색 페이지에서 무한스크롤로 모든 카드 수집.
+CARD_EXTRACT_JS = """
+() => {
+  const results = [];
+  const items = Array.from(document.querySelectorAll('li.VLTHu, li.bx'));
 
-    - li.VLTHu (지도 카드) 셀렉터 사용 — span.YwYLL이 사업장명
-    - 15~25회 스크롤, 각 0.6~1.2초 랜덤 대기
-    - 2회 연속 li.VLTHu 카운트 동일하면 조기 종료
-    """
-    url = f"https://m.search.naver.com/search.naver?where=m&query={keyword}"
-    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    await asyncio.sleep(2.0)
+  items.forEach(li => {
+    const text = (li.innerText || '').trim();
+    if (!text || text.length < 2) return;
 
-    scroll_count = random.randint(15, 25)
-    prev_count = 0
-    stale_rounds = 0
+    const isVLTHu = li.classList.contains('VLTHu');
+    if (!isVLTHu) {
+      const hasPlaceLink = !!li.querySelector('a.place_link');
+      const hasMPlaceHref = Array.from(li.querySelectorAll('a')).some(
+        a => a.href && a.href.includes('place.naver.com')
+      );
+      if (!hasPlaceLink && !hasMPlaceHref) return;
+    }
 
-    for i in range(scroll_count):
-        await page.mouse.wheel(0, 1000)
-        await asyncio.sleep(random.uniform(0.6, 1.2))
+    let name = '';
+    const ywyllEl = li.querySelector('span.YwYLL');
+    const placeLink = li.querySelector('a.place_link');
+    const strongEl = li.querySelector('strong');
+    const h3El = li.querySelector('h3');
 
-        # VLTHu(지도 카드) + bx color_blue(광고 플레이스 카드) 합산으로 수렴 판단
-        cur_count = await page.evaluate(
-            "() => document.querySelectorAll('li.VLTHu, li.bx.color_blue').length"
-        )
-        if cur_count == prev_count:
-            stale_rounds += 1
-            if stale_rounds >= 2:
-                print(f"[{keyword}] scroll early stop at round {i+1} (no new cards, count={cur_count})")
-                break
-        else:
-            stale_rounds = 0
-        prev_count = cur_count
+    if (ywyllEl) {
+      name = ywyllEl.innerText.trim().split('\\n')[0].trim();
+    } else if (placeLink) {
+      name = placeLink.innerText.trim().split('\\n')[0].trim();
+    } else if (strongEl) {
+      name = strongEl.innerText.trim().split('\\n')[0].trim();
+    } else if (h3El) {
+      name = h3El.innerText.trim().split('\\n')[0].trim();
+    } else {
+      const lines = text.split('\\n').map(s => s.trim()).filter(Boolean);
+      name = lines.find(l => l.length > 2 && !/^\\d+$/.test(l) && l !== '이미지수') || lines[0] || '';
+    }
 
-    # 최종 카드 파싱 — span.YwYLL이 검증된 사업장명 셀렉터
-    # 순서: VLTHu(지도 카드)가 페이지 상단에 블록 형태로 노출되고,
-    #       그 아래 bx 통합검색 결과 카드가 이어짐
-    # 두 타입 모두 수집하여 실제 노출 순서(DOM 순서)로 rank 계산
-    cards = await page.evaluate(
+    if (!name) return;
+
+    const allLines = text.split('\\n').map(s => s.trim()).filter(Boolean);
+    let address = '';
+    for (const l of allLines) {
+      if (/(서울|경기|하남|화성|동탄|미사|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|[가-힣]+동\\s?\\d*|[가-힣]+로\\s?\\d+)/.test(l)) {
+        address = l;
+        break;
+      }
+    }
+
+    results.push({ name, address, raw: text.slice(0, 200) });
+  });
+
+  return results;
+}
+"""
+
+
+async def click_next_page(page) -> bool:
+    """플레이스 위젯의 '다음 페이지' 버튼 클릭 시도. 성공 시 True."""
+    clicked_sel = await page.evaluate(
         """
         () => {
-          const results = [];
-
-          // VLTHu: 지도 섹션 플레이스 카드
-          // bx: 통합검색 결과 카드 — place_link 없으면 플레이스 카드가 아님
-          const items = Array.from(document.querySelectorAll('li.VLTHu, li.bx'));
-
-          items.forEach(li => {
-            const text = (li.innerText || '').trim();
-            if (!text || text.length < 2) return;
-
-            // li.bx 중 플레이스 관련 카드만 포함 (place_link 또는 m.place.naver.com 링크)
-            const isVLTHu = li.classList.contains('VLTHu');
-            if (!isVLTHu) {
-              const hasPlaceLink = !!li.querySelector('a.place_link');
-              const hasMPlaceHref = Array.from(li.querySelectorAll('a')).some(
-                a => a.href && a.href.includes('place.naver.com')
-              );
-              if (!hasPlaceLink && !hasMPlaceHref) return;
+          // 네이버 모바일 통합검색 플레이스 위젯 pagination
+          // 일반적으로 '다음'/'next' 텍스트 또는 오른쪽 화살표 아이콘
+          const selectors = [
+            'a._btn_next:not([aria-disabled="true"])',
+            'a.btn_next:not([aria-disabled="true"])',
+            'button._btn_next:not(:disabled)',
+            'button.btn_next:not(:disabled)',
+            'a[role="button"][aria-label*="다음"]',
+            'button[aria-label*="다음"]',
+            // 플레이스 위젯 전용
+            '.api_flicking_wrap a.flick_next:not(.disabled)',
+            '.tit_map_area + div a.btn_next',
+          ];
+          for (const sel of selectors) {
+            const els = document.querySelectorAll(sel);
+            for (const el of els) {
+              if (el.offsetParent === null) continue;
+              if (el.disabled) continue;
+              if (el.getAttribute('aria-disabled') === 'true') continue;
+              el.scrollIntoView({block: 'center'});
+              el.click();
+              return sel;
             }
-
-            // 이름 추출: span.YwYLL (검증된 셀렉터) → fallback 체인
-            // place_link 텍스트는 키워드 목록 전체를 포함할 수 있으므로 첫 줄만 사용
-            let name = '';
-            const ywyllEl = li.querySelector('span.YwYLL');
-            const placeLink = li.querySelector('a.place_link');
-            const strongEl = li.querySelector('strong');
-            const h3El = li.querySelector('h3');
-
-            if (ywyllEl) {
-              name = ywyllEl.innerText.trim().split('\\n')[0].trim();
-            } else if (placeLink) {
-              name = placeLink.innerText.trim().split('\\n')[0].trim();
-            } else if (strongEl) {
-              name = strongEl.innerText.trim().split('\\n')[0].trim();
-            } else if (h3El) {
-              name = h3El.innerText.trim().split('\\n')[0].trim();
-            } else {
-              // 줄 기반 fallback: 이미지수/숫자 제외하고 첫 의미있는 줄
-              const lines = text.split('\\n').map(s => s.trim()).filter(Boolean);
-              name = lines.find(l => l.length > 2 && !/^\\d+$/.test(l) && l !== '이미지수') || lines[0] || '';
+          }
+          // 최후 수단: '다음' 텍스트가 있는 anchor/button 찾기
+          const allBtns = Array.from(document.querySelectorAll('a, button'));
+          for (const el of allBtns) {
+            const t = (el.innerText || el.getAttribute('aria-label') || '').trim();
+            if (t === '다음' || t === 'Next' || t === '다음 페이지') {
+              if (el.offsetParent === null) continue;
+              if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+              el.scrollIntoView({block: 'center'});
+              el.click();
+              return 'text-match:' + t;
             }
-
-            if (!name) return;
-
-            // 주소 추출: 텍스트 줄 중 지역명 패턴 포함 줄
-            const allLines = text.split('\\n').map(s => s.trim()).filter(Boolean);
-            let address = '';
-            for (const l of allLines) {
-              if (/(서울|경기|하남|화성|동탄|미사|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|[가-힣]+동\\s?\\d*|[가-힣]+로\\s?\\d+)/.test(l)) {
-                address = l;
-                break;
-              }
-            }
-
-            results.push({ name, address, raw: text.slice(0, 200) });
-          });
-
-          // 중복 제거 (name 기준)
-          const seen = new Set();
-          return results.filter(r => {
-            if (!r.name || seen.has(r.name)) return false;
-            seen.add(r.name);
-            return true;
-          });
+          }
+          return null;
         }
         """
     )
+    return bool(clicked_sel), clicked_sel
 
-    return cards or []
+
+async def scroll_and_collect(page, keyword: str) -> list[dict]:
+    """m.search.naver.com 통합검색 페이지 → 플레이스 위젯 페이지네이션 순회 수집.
+
+    동작:
+      1) 첫 페이지 로드 + 몇 번 스크롤해서 지도 섹션을 뷰포트에 노출
+      2) 첫 페이지 카드 수집
+      3) '다음 페이지' 버튼 찾아 클릭 → 로드 대기 → 카드 수집 반복
+      4) 더 이상 다음 페이지 없거나 최대 MAX_PAGES(8) 도달 시 종료
+      5) 이름 기준 중복 제거 후 DOM 등장순으로 반환
+    """
+    url = f"https://m.search.naver.com/search.naver?where=m&query={keyword}"
+    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    await asyncio.sleep(random.uniform(1.8, 2.6))
+
+    # 지도/플레이스 섹션이 뷰포트에 들어오도록 약간 스크롤
+    for _ in range(random.randint(3, 6)):
+        await page.mouse.wheel(0, 700)
+        await asyncio.sleep(random.uniform(0.4, 0.8))
+
+    all_cards: list[dict] = []
+    seen_names: set[str] = set()
+    MAX_PAGES = 8
+
+    for page_num in range(1, MAX_PAGES + 1):
+        await asyncio.sleep(random.uniform(0.8, 1.4))
+
+        # 현재 페이지 카드 수집
+        page_cards = await page.evaluate(CARD_EXTRACT_JS) or []
+        new_this_round = 0
+        for c in page_cards:
+            nm = (c.get("name") or "").strip()
+            if not nm or nm in seen_names:
+                continue
+            seen_names.add(nm)
+            all_cards.append(c)
+            new_this_round += 1
+
+        print(f"[{keyword}] page {page_num}: page_cards={len(page_cards)}, new={new_this_round}, total={len(all_cards)}")
+
+        if page_num >= MAX_PAGES:
+            break
+
+        # 다음 페이지 버튼 클릭 시도
+        ok, sel = await click_next_page(page)
+        if not ok:
+            print(f"[{keyword}] no more pages (next btn not found at page {page_num})")
+            break
+        # 버튼 클릭 후 새 카드 렌더 대기
+        await asyncio.sleep(random.uniform(1.5, 2.5))
+
+        # 카드 렌더 감지 (최대 추가 3초 대기)
+        for _ in range(6):
+            check = await page.evaluate(
+                "() => document.querySelectorAll('li.VLTHu, li.bx').length"
+            )
+            if check >= 1:
+                break
+            await asyncio.sleep(0.5)
+
+    return all_cards
 
 
 async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = False) -> list[dict]:
