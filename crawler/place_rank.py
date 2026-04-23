@@ -1,6 +1,6 @@
 """
-네이버 플레이스 순위 추적 크롤러
-================================
+네이버 플레이스 순위 추적 크롤러 (map.naver.com 방식)
+====================================================
 
 실행:
   python place_rank.py              # 전체 active 키워드 크롤 (auto)
@@ -13,10 +13,12 @@
   SUPABASE_SERVICE_ROLE_KEY
 
 동작:
-  - 모바일 엔드포인트 https://m.search.naver.com/search.naver?where=m&query=KW
-  - Playwright chromium + UA 로테이션 + 랜덤 대기 + 무한스크롤 시뮬
-  - 카드 텍스트에 '베라짐' 포함 → is_found=true, branch 자동 태깅 (주소에 '미사'/'동탄')
-  - 못 찾으면 스크롤 완료 후 is_found=false 1건만 기록
+  - 엔드포인트: https://map.naver.com/p/search/<keyword>?searchType=place
+  - 결과는 #searchIframe 안에서 렌더링되므로 iframe 진입 후 파싱
+  - 각 li에서 "광고" 뱃지가 있으면 제외하고 순위 매김
+  - Playwright chromium + UA 로테이션 + 랜덤 대기
+  - 카드 이름에 '베라짐' 포함 → is_found=true, branch 자동 태깅 (주소에 '미사'/'동탄')
+  - 못 찾으면 is_found=false 1건만 기록
 """
 import os
 import sys
@@ -124,89 +126,130 @@ def detect_branch(address: str) -> str | None:
 
 CARD_EXTRACT_JS = """
 () => {
+  // map.naver.com 의 #searchIframe 내부에서 실행되는 추출 스크립트.
+  // 목적: li 아이템 중 '광고' 뱃지 없는 것만 순서대로 추출.
   const results = [];
-  const items = Array.from(document.querySelectorAll('li.VLTHu, li.bx'));
 
-  items.forEach(li => {
-    const text = (li.innerText || '').trim();
-    if (!text || text.length < 2) return;
-
-    const isVLTHu = li.classList.contains('VLTHu');
-    if (!isVLTHu) {
-      const hasPlaceLink = !!li.querySelector('a.place_link');
-      const hasMPlaceHref = Array.from(li.querySelectorAll('a')).some(
-        a => a.href && a.href.includes('place.naver.com')
-      );
-      if (!hasPlaceLink && !hasMPlaceHref) return;
-    }
-
-    let name = '';
-    const ywyllEl = li.querySelector('span.YwYLL');
-    const placeLink = li.querySelector('a.place_link');
-    const strongEl = li.querySelector('strong');
-    const h3El = li.querySelector('h3');
-
-    if (ywyllEl) {
-      name = ywyllEl.innerText.trim().split('\\n')[0].trim();
-    } else if (placeLink) {
-      name = placeLink.innerText.trim().split('\\n')[0].trim();
-    } else if (strongEl) {
-      name = strongEl.innerText.trim().split('\\n')[0].trim();
-    } else if (h3El) {
-      name = h3El.innerText.trim().split('\\n')[0].trim();
-    } else {
-      const lines = text.split('\\n').map(s => s.trim()).filter(Boolean);
-      name = lines.find(l => l.length > 2 && !/^\\d+$/.test(l) && l !== '이미지수') || lines[0] || '';
-    }
-
-    if (!name) return;
-
-    const allLines = text.split('\\n').map(s => s.trim()).filter(Boolean);
-    let address = '';
-    for (const l of allLines) {
-      if (/(서울|경기|하남|화성|동탄|미사|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|[가-힣]+동\\s?\\d*|[가-힣]+로\\s?\\d+)/.test(l)) {
-        address = l;
-        break;
+  // 리스트 컨테이너 후보 — ul.place_biz_list / ul.lst_place / ul#_pcmap_list_scroll_container 등
+  // 가장 많이 쓰이는 패턴: ul > li (각 li가 플레이스 1건)
+  // 후보 li 집합: class 안에 'UEzoS' 또는 'place' 또는 텍스트 길이 충분한 li
+  let items = Array.from(document.querySelectorAll('li.UEzoS, li.VLTHu, li.place_bluelink_wrapper, li[data-id]'));
+  if (items.length < 2) {
+    // fallback: ul 내부 li 전부
+    const uls = Array.from(document.querySelectorAll('ul'));
+    for (const ul of uls) {
+      const lis = Array.from(ul.children).filter(c => c.tagName === 'LI');
+      if (lis.length >= 3) {
+        // 대표 후보 ul — 텍스트가 가장 많이 든 li가 3개 이상 있으면 채택
+        const rich = lis.filter(li => (li.innerText || '').length > 15);
+        if (rich.length >= 3) {
+          items = rich;
+          break;
+        }
       }
     }
+  }
 
-    results.push({ name, address, raw: text.slice(0, 200) });
-  });
+  const isAdLi = (li) => {
+    // '광고' 또는 'AD' 뱃지 감지
+    // 패턴 1: 명시 클래스 (네이버가 자주 쓰는 광고 마커)
+    if (li.querySelector('em.place_blind, span.place_blind, i.place_blind')) {
+      const blind = li.querySelector('em.place_blind, span.place_blind, i.place_blind');
+      if (/광고|ad/i.test(blind.innerText || '')) return true;
+    }
+    // 패턴 2: 인라인 텍스트로 "광고" 단독 단어가 들어간 span/em/i
+    const marks = li.querySelectorAll('em, span, i, ins');
+    for (const m of marks) {
+      const t = (m.innerText || '').trim();
+      if (t === '광고' || t === 'AD' || t === '광고!' || t === '광고ⓘ') return true;
+    }
+    // 패턴 3: innerText 맨 앞 줄에 '광고'
+    const head = (li.innerText || '').trim().split('\\n').map(s => s.trim()).filter(Boolean)[0] || '';
+    if (head === '광고' || head === '광고ⓘ' || head === '광고!' || head === '광고 ⓘ') return true;
+    // 패턴 4: data-type/data-group에 ad
+    if ((li.getAttribute('data-type') || '').toLowerCase().includes('ad')) return true;
+    return false;
+  };
+
+  const getName = (li) => {
+    const selectors = [
+      'span.YwYLL', 'span.TYaxT', '.place_bluelink > span',
+      'a.tzwk0 span', '.place_bluelink', 'strong', 'h3', 'h4',
+      '.tit_place', '.place_name',
+    ];
+    for (const sel of selectors) {
+      const el = li.querySelector(sel);
+      if (el) {
+        const t = (el.innerText || '').trim().split('\\n')[0].trim();
+        if (t && t.length >= 2) return t;
+      }
+    }
+    const lines = (li.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+    // 첫 줄이 '광고' 류면 두 번째 줄
+    for (const l of lines) {
+      if (l === '광고' || l === '광고ⓘ' || l === '광고!' || l === 'AD') continue;
+      if (l.length >= 2 && !/^\\d+$/.test(l)) return l;
+    }
+    return '';
+  };
+
+  const getAddress = (li) => {
+    const lines = (li.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+    for (const l of lines) {
+      if (/(서울|경기|하남|화성|동탄|미사|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|[가-힣]+동\\s?\\d*|[가-힣]+로\\s?\\d+)/.test(l)) {
+        return l;
+      }
+    }
+    return '';
+  };
+
+  for (const li of items) {
+    const text = (li.innerText || '').trim();
+    if (!text || text.length < 5) continue;
+    const ad = isAdLi(li);
+    const name = getName(li);
+    if (!name) continue;
+    const address = getAddress(li);
+    results.push({
+      name,
+      address,
+      is_ad: ad,
+      raw: text.replace(/\\n+/g, ' | ').slice(0, 200),
+    });
+  }
 
   return results;
 }
 """
 
 
-async def click_next_page(page) -> tuple[bool, str | None]:
-    """플레이스 위젯의 '다음 페이지' 버튼 클릭 시도. 성공 시 (True, selector).
+async def click_next_page(frame) -> tuple[bool, str | None]:
+    """map.naver.com #searchIframe 내부의 '다음 페이지로' 버튼 클릭.
 
-    보수적 접근: 명시적으로 플레이스/지도 관련 셀렉터만 사용.
-    일반 텍스트 매칭은 하지 않는다 (잘못된 버튼 클릭해 DOM 파괴 방지).
+    네이버 지도 검색 iframe 페이지네이션:
+      - 하단에 1,2,3,4,5 숫자 버튼 + '다음페이지' 화살표
+      - a.mBN2s / button[aria-label='다음페이지'] / a[role='button'][class*='next'] 등
     """
-    clicked_sel = await page.evaluate(
+    clicked_sel = await frame.evaluate(
         """
         () => {
-          // Naver PC (search.naver.com) 플레이스 위젯 pagination
-          // 2026 기준 검증된 셀렉터 (DOM 디버그로 확인됨):
-          //   1) aria-label="다음 페이지로 가기" — 플레이스 섹션 하단 페이지 번호
-          //   2) button.next_button — flicking carousel의 다음 버튼
-          //   3) a.cmm_pg_next — 통합 공통 pagination (place 아닐 수 있음)
           const selectors = [
-            // [PRIMARY] sds-comps-button + aria-label='다음 페이지로 가기'
-            'button[aria-label="다음 페이지로 가기"]:not([disabled])',
-            // [SECONDARY] flicking carousel next — disabled 클래스가 붙어있으면 제외
-            'button.next_button:not(.flicking-arrow-disabled):not(:disabled)',
-            // [TERTIARY] 통합 common pagination
-            'a.cmm_pg_next:not(.disabled)',
-            // [FALLBACK] 플레이스 섹션 scoped 옛 셀렉터
-            '.api_flicking_wrap button.flick_next:not(:disabled)',
+            'a[aria-label="다음페이지"]:not([aria-disabled="true"])',
+            'button[aria-label="다음페이지"]:not([disabled])',
+            'a[aria-label="다음 페이지"]:not([aria-disabled="true"])',
+            'button[aria-label="다음 페이지"]:not([disabled])',
+            // 네이버 지도 특유 클래스들 (자주 바뀜)
+            'a.mBN2s:not(.qxokY)',           // 페이지 번호 링크 중 비활성 아닌 것
+            'a.eUTV2:not(.qxokY)',           // 다음 화살표 (관찰된 패턴)
+            'a[class*="next" i]:not([aria-disabled="true"])',
+            'button[class*="next" i]:not([disabled])',
           ];
+          // 현재 활성 페이지(.qxokY 또는 .on 또는 aria-current="true") 다음 번호로 이동
+          // 우선 명시적 '다음' 버튼 시도 후 실패하면 활성 페이지 다음 번호 클릭
           for (const sel of selectors) {
             const els = document.querySelectorAll(sel);
             for (const el of els) {
               if (el.offsetParent === null) continue;
-              if (el.disabled) continue;
               if (el.getAttribute('aria-disabled') === 'true') continue;
               const rect = el.getBoundingClientRect();
               if (rect.width === 0 || rect.height === 0) continue;
@@ -214,6 +257,13 @@ async def click_next_page(page) -> tuple[bool, str | None]:
               el.click();
               return sel;
             }
+          }
+          // fallback: 활성 페이지 번호의 다음 형제 <a>
+          const active = document.querySelector('a.qxokY, a[aria-current="true"], a.on');
+          if (active && active.nextElementSibling && active.nextElementSibling.tagName === 'A') {
+            active.nextElementSibling.scrollIntoView({block: 'center'});
+            active.nextElementSibling.click();
+            return 'active-next-sibling';
           }
           return null;
         }
@@ -223,7 +273,10 @@ async def click_next_page(page) -> tuple[bool, str | None]:
 
 
 async def debug_dump_cards(page, keyword: str, label: str = ""):
-    """페이지 상에 존재하는 '플레이스스러운' li 엘리먼트들을 덤프. 카드 셀렉터 발굴용."""
+    """페이지 상에 존재하는 '플레이스스러운' li 엘리먼트들을 덤프. 카드 셀렉터 발굴용.
+
+    page 인자는 Playwright Page 또는 Frame 어느 쪽이든 evaluate 지원.
+    """
     info = await page.evaluate(
         """
         () => {
@@ -293,65 +346,121 @@ async def debug_dump_pagination(page, keyword: str):
         print(f"  {i+1}. <{c['tag']}> class='{c['class']}' text='{c['text']}' aria='{c['aria']}' visible={c['visible']}")
 
 
+async def _get_search_frame(page, timeout_ms: int = 15000):
+    """map.naver.com #searchIframe 로드 대기 후 Frame 객체 반환."""
+    deadline = asyncio.get_event_loop().time() + (timeout_ms / 1000)
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            el = await page.query_selector('iframe#searchIframe')
+            if el:
+                frame = await el.content_frame()
+                if frame:
+                    # 프레임 내부에 li 렌더링 시작됐는지 가볍게 체크
+                    try:
+                        await frame.wait_for_selector('ul li', timeout=2000)
+                        return frame
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        await asyncio.sleep(0.3)
+    return None
+
+
 async def scroll_and_collect(page, keyword: str) -> list[dict]:
-    """m.search.naver.com 통합검색 페이지 → 플레이스 위젯 페이지네이션 순회 수집.
+    """map.naver.com/p/search 페이지 → #searchIframe 진입 → 광고 제외 순위 수집.
 
     동작:
-      1) 첫 페이지 로드 + 몇 번 스크롤해서 지도 섹션을 뷰포트에 노출
-      2) 첫 페이지 카드 수집
-      3) '다음 페이지' 버튼 찾아 클릭 → 로드 대기 → 카드 수집 반복
-      4) 더 이상 다음 페이지 없거나 최대 MAX_PAGES(8) 도달 시 종료
-      5) 이름 기준 중복 제거 후 DOM 등장순으로 반환
+      1) map.naver.com/p/search/<keyword>?searchType=place 로드
+      2) #searchIframe frame 대기 및 진입
+      3) iframe 내부 스크롤 → 추가 로드
+      4) 카드 수집 (광고 li는 별도 표시, 최종 순위에서 제외)
+      5) 페이지 번호/다음 버튼 클릭 → 반복 (MAX_PAGES)
+      6) 광고 아닌 카드만 DOM 등장순으로 반환
     """
-    # PC 버전 URL 사용 — 모바일 버전은 '< 1/5 >' pagination이 없음
-    url = f"https://search.naver.com/search.naver?query={keyword}"
+    url = f"https://map.naver.com/p/search/{keyword}?searchType=place"
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    await asyncio.sleep(random.uniform(1.8, 2.6))
+    await asyncio.sleep(random.uniform(2.0, 3.0))
 
-    # 플레이스 섹션이 뷰포트에 들어오도록 스크롤 (PC는 더 큰 화면이므로 많이 스크롤)
-    for _ in range(random.randint(5, 8)):
-        await page.mouse.wheel(0, 800)
-        await asyncio.sleep(random.uniform(0.4, 0.8))
+    frame = await _get_search_frame(page, timeout_ms=15000)
+    if not frame:
+        print(f"[{keyword}] #searchIframe not found — skip")
+        return []
 
     all_cards: list[dict] = []
     seen_names: set[str] = set()
-    MAX_PAGES = 6
+    MAX_PAGES = 5
+
+    async def scroll_iframe_to_bottom():
+        """iframe 내부 스크롤 컨테이너를 끝까지 스크롤 (무한 로드 유도)."""
+        prev_count = -1
+        for _ in range(8):
+            try:
+                # 스크롤 컨테이너 후보를 찾아 스크롤 실행
+                await frame.evaluate(
+                    """
+                    () => {
+                      const containers = [
+                        document.querySelector('#_pcmap_list_scroll_container'),
+                        document.querySelector('.Ryr1F'),
+                        document.scrollingElement,
+                        document.documentElement,
+                      ].filter(Boolean);
+                      for (const c of containers) {
+                        c.scrollTop = (c.scrollHeight || 10000);
+                      }
+                    }
+                    """
+                )
+            except Exception:
+                pass
+            await asyncio.sleep(random.uniform(0.5, 0.9))
+            try:
+                count = await frame.evaluate("() => document.querySelectorAll('ul li').length")
+            except Exception:
+                count = 0
+            if count == prev_count:
+                break
+            prev_count = count
 
     for page_num in range(1, MAX_PAGES + 1):
         await asyncio.sleep(random.uniform(0.8, 1.4))
+        await scroll_iframe_to_bottom()
 
-        # 현재 페이지 카드 수집
-        page_cards = await page.evaluate(CARD_EXTRACT_JS) or []
+        try:
+            page_cards = await frame.evaluate(CARD_EXTRACT_JS) or []
+        except Exception as e:
+            print(f"[{keyword}] extract failed on page {page_num}: {e}")
+            page_cards = []
+
         new_this_round = 0
+        ads_this_round = 0
         for c in page_cards:
             nm = (c.get("name") or "").strip()
             if not nm or nm in seen_names:
                 continue
             seen_names.add(nm)
             all_cards.append(c)
+            if c.get("is_ad"):
+                ads_this_round += 1
             new_this_round += 1
 
-        print(f"[{keyword}] page {page_num}: page_cards={len(page_cards)}, new={new_this_round}, total={len(all_cards)}")
+        print(f"[{keyword}] page {page_num}: page_cards={len(page_cards)}, new={new_this_round} (ad={ads_this_round}), total={len(all_cards)}")
 
-        # 첫 페이지에서 pagination + 카드 후보 덤프 (디버깅용)
+        # 첫 페이지에서 디버그 덤프
         if page_num == 1:
-            await debug_dump_pagination(page, keyword)
-            await debug_dump_cards(page, keyword, label="before-click")
-        elif page_num == 2:
-            # 클릭 이후 카드가 실제로 바뀌는지 확인용
-            await debug_dump_cards(page, keyword, label="after-1st-click")
+            await debug_dump_pagination(frame, keyword)
+            await debug_dump_cards(frame, keyword, label="page1")
 
         if page_num >= MAX_PAGES:
             break
 
-        # 다음 페이지 버튼 클릭 시도 (보수적 셀렉터만)
-        ok, sel = await click_next_page(page)
+        ok, sel = await click_next_page(frame)
         if not ok:
             print(f"[{keyword}] no more pages — next btn not found at page {page_num}")
             break
         print(f"[{keyword}] clicked next via '{sel}'")
-        # 버튼 클릭 후 새 카드 렌더 대기
-        await asyncio.sleep(random.uniform(1.5, 2.5))
+        await asyncio.sleep(random.uniform(1.8, 2.8))
 
     return all_cards
 
@@ -380,9 +489,17 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
 
     try:
         cards = await scroll_and_collect(page, keyword)
-        print(f"[{keyword}] collected={len(cards)}")
+        total_cards = len(cards)
+        ad_cards = sum(1 for c in cards if c.get("is_ad"))
+        organic_cards = total_cards - ad_cards
+        print(f"[{keyword}] collected={total_cards} (organic={organic_cards}, ads={ad_cards})")
 
-        for idx, card in enumerate(cards, start=1):
+        # 광고 제외 순위 매김
+        organic_idx = 0
+        for card in cards:
+            if card.get("is_ad"):
+                continue  # 광고는 순위에서 제외
+            organic_idx += 1
             name = card.get("name", "")
             address = card.get("address", "")
             if TARGET_NAME in name:
@@ -390,11 +507,11 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
                 if branch in found_by_branch:
                     continue  # 이미 기록
                 found_by_branch[branch] = {
-                    "rank": idx,
+                    "rank": organic_idx,
                     "name": name,
                     "address": address,
                 }
-                print(f"  >>> FOUND '{name}' branch={branch} at rank={idx}")
+                print(f"  >>> FOUND '{name}' branch={branch} at rank={organic_idx} (광고 {ad_cards}건 제외)")
 
         # 결과 row 조립 (page=1 고정)
         if found_by_branch:
