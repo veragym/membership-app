@@ -91,6 +91,8 @@ const PromoCalendarTab = (() => {
               <button type="button" class="plan-btn-sm" id="planCalToday">오늘</button>
             </div>
             <div class="plan-cal-actions">
+              <button type="button" class="plan-btn-sm" id="planCalTplMgr" title="매월 반복되는 업무 템플릿 관리">📋 고정업무 관리</button>
+              <button type="button" class="plan-btn-sm" id="planCalTplGen" title="이 달에 고정업무를 일괄 생성">↻ 이 달 고정업무 생성</button>
               <button type="button" class="plan-btn-primary" id="planCalNewBtn">+ 새 업무</button>
             </div>
           </div>
@@ -124,6 +126,8 @@ const PromoCalendarTab = (() => {
       refreshCalendar();
     });
     container.querySelector('#planCalNewBtn').addEventListener('click', () => openTaskModal(null, null));
+    container.querySelector('#planCalTplMgr').addEventListener('click', () => openTemplateListModal());
+    container.querySelector('#planCalTplGen').addEventListener('click', () => handleGenerateMonthFromTemplates());
     container.querySelectorAll('.plan-filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         poolFilter = btn.dataset.f;
@@ -683,6 +687,291 @@ const PromoCalendarTab = (() => {
     }
     Toast.success('삭제되었습니다');
     Modal.close();
+    await Promise.all([refreshCalendar(), refreshPool()]);
+  }
+
+  // ═══ 매월 고정업무 템플릿 ═══════════════════════════════════════════
+  // 월의 마지막 일수
+  function lastDayOfMonth(y, m /* 1-based */) {
+    return new Date(y, m, 0).getDate();
+  }
+  // 템플릿의 day_of_month_start를 실제 날짜로 clamp (예: 31일 템플릿을 2월에 적용 시 28/29)
+  function clampDayToMonth(day, y, m) {
+    return Math.min(day, lastDayOfMonth(y, m));
+  }
+
+  async function openTemplateListModal() {
+    const { data: tpls, error } = await supabase
+      .from('task_templates')
+      .select('*')
+      .order('day_of_month_start');
+    if (error) { Toast.error('템플릿 로드 실패: ' + error.message); return; }
+
+    Modal.open({
+      type: 'center', size: 'md',
+      title: '매월 고정업무 템플릿',
+      html: `
+        <div class="plan-tpl-list-wrap">
+          <div class="plan-tpl-list-hdr">
+            <span class="plan-tpl-list-hint">월마다 자동으로 생성할 업무를 템플릿으로 등록합니다.</span>
+            <button type="button" class="btn btn-primary" id="planTplNew">+ 새 템플릿</button>
+          </div>
+          <div class="plan-tpl-list" id="planTplList">
+            ${(tpls || []).length === 0
+              ? `<div class="plan-placeholder">등록된 템플릿이 없습니다.</div>`
+              : (tpls || []).map(tp => {
+                  const color = CATEGORY_COLORS[tp.category] || CATEGORY_COLORS['기타'];
+                  const dayLabel = tp.day_of_month_start >= 29
+                    ? `매월 ${tp.day_of_month_start}일 (없으면 말일)`
+                    : `매월 ${tp.day_of_month_start}일`;
+                  return `
+                    <div class="plan-tpl-row ${tp.is_active ? '' : 'is-inactive'}" data-id="${tp.id}">
+                      <span class="plan-pool-chip" style="background:${color}">${esc(tp.category)}</span>
+                      <div class="plan-tpl-row-main">
+                        <div class="plan-tpl-row-title">${esc(tp.title)}</div>
+                        <div class="plan-tpl-row-meta">${dayLabel} · ${tp.duration_days}일간</div>
+                      </div>
+                      <label class="plan-tpl-active-toggle" title="${tp.is_active ? '사용중 — 클릭 시 중지' : '중지 — 클릭 시 사용'}">
+                        <input type="checkbox" data-role="active" ${tp.is_active ? 'checked' : ''}>
+                        <span>${tp.is_active ? '사용' : '중지'}</span>
+                      </label>
+                      <button type="button" class="btn btn-sm" data-role="edit">수정</button>
+                    </div>
+                  `;
+                }).join('')
+            }
+          </div>
+          <div class="plan-tpl-list-footer">
+            <button type="button" class="btn btn-secondary" id="planTplClose">닫기</button>
+          </div>
+        </div>
+      `,
+      onOpen: (el) => {
+        el.querySelector('#planTplNew').addEventListener('click', () => openTemplateEditModal(null));
+        el.querySelector('#planTplClose').addEventListener('click', () => Modal.close());
+        el.querySelectorAll('.plan-tpl-row').forEach(row => {
+          const id = row.dataset.id;
+          row.querySelector('[data-role=edit]').addEventListener('click', () => openTemplateEditModal(id));
+          row.querySelector('[data-role=active]').addEventListener('change', async (e) => {
+            const nextActive = e.target.checked;
+            const { error: err } = await supabase.from('task_templates').update({ is_active: nextActive }).eq('id', id);
+            if (err) { Toast.error('변경 실패: ' + err.message); e.target.checked = !nextActive; return; }
+            Toast.success(nextActive ? '사용으로 변경' : '중지로 변경');
+            openTemplateListModal();
+          });
+        });
+      }
+    });
+  }
+
+  async function openTemplateEditModal(tplId) {
+    const isEdit = !!tplId;
+    let tpl = { title: '', description: '', category: '기타', day_of_month_start: 1, duration_days: 1, is_active: true };
+    let items = [];
+    if (isEdit) {
+      const [{ data: t, error: e1 }, { data: its, error: e2 }] = await Promise.all([
+        supabase.from('task_templates').select('*').eq('id', tplId).single(),
+        supabase.from('task_template_items').select('*').eq('template_id', tplId).order('order_index')
+      ]);
+      if (e1 || e2) { Toast.error('템플릿 로드 실패'); return; }
+      tpl = t;
+      items = its || [];
+    }
+
+    Modal.open({
+      type: 'center', size: 'md',
+      title: isEdit ? '템플릿 수정' : '템플릿 등록',
+      html: `
+        <form id="planTplForm" class="plan-task-form">
+          <div class="plan-form-row">
+            <label>제목</label>
+            <input type="text" name="title" value="${esc(tpl.title || '')}" maxlength="120" required placeholder="예: 월초 회의 준비">
+          </div>
+          <div class="plan-form-grid3">
+            <div class="plan-form-row">
+              <label>카테고리</label>
+              <select name="category">
+                ${CATEGORIES.map(c => `<option value="${c}" ${c===tpl.category?'selected':''}>${c}</option>`).join('')}
+              </select>
+            </div>
+            <div class="plan-form-row">
+              <label>시작일 (매월 N일)</label>
+              <input type="number" name="day_of_month_start" min="1" max="31" value="${tpl.day_of_month_start}" required>
+            </div>
+            <div class="plan-form-row">
+              <label>기간 (일)</label>
+              <input type="number" name="duration_days" min="1" max="31" value="${tpl.duration_days}" required>
+            </div>
+          </div>
+          <div class="plan-form-row">
+            <label>설명</label>
+            <textarea name="description" rows="2" placeholder="선택">${esc(tpl.description || '')}</textarea>
+          </div>
+
+          <div class="plan-items-editor">
+            <div class="plan-items-hdr">
+              <span>체크리스트 (드래그로 순서 변경)</span>
+              <button type="button" class="plan-btn-sm" id="planTplItemAdd">+ 항목 추가</button>
+            </div>
+            <div class="plan-items-list" id="planTplItemsList"></div>
+          </div>
+
+          <div class="plan-task-actions">
+            ${isEdit ? `<button type="button" class="btn btn-danger" id="planTplDel">삭제</button>` : ''}
+            <button type="button" class="btn btn-secondary" id="planTplCancel">취소</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? '수정' : '등록'}</button>
+          </div>
+        </form>
+      `,
+      onOpen: (el) => {
+        const listEl = el.querySelector('#planTplItemsList');
+        const workingItems = items.map(it => ({ id: it.id, content: it.content, is_done: false, order_index: it.order_index }));
+        if (!workingItems.length) workingItems.push({ id: tmpId(), content: '', is_done: false, order_index: 0 });
+        renderItemsEditor(listEl, workingItems);
+
+        el.querySelector('#planTplItemAdd').addEventListener('click', () => {
+          workingItems.push({ id: tmpId(), content: '', is_done: false, order_index: workingItems.length });
+          renderItemsEditor(listEl, workingItems);
+          const last = listEl.querySelector('.plan-item-row:last-child input[type=text]');
+          if (last) last.focus();
+        });
+
+        el.querySelector('#planTplCancel').addEventListener('click', () => openTemplateListModal());
+        if (isEdit) el.querySelector('#planTplDel').addEventListener('click', async () => {
+          if (!confirm('이 템플릿을 삭제하시겠습니까?\n(이미 생성된 업무는 그대로 남습니다)')) return;
+          const { error } = await supabase.from('task_templates').delete().eq('id', tplId);
+          if (error) { Toast.error('삭제 실패: ' + error.message); return; }
+          Toast.success('삭제되었습니다');
+          openTemplateListModal();
+        });
+
+        el.querySelector('#planTplForm').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await handleTemplateSubmit(e.target, tplId, workingItems, items);
+        });
+      }
+    });
+  }
+
+  async function handleTemplateSubmit(form, editId, workingItems, originalItems) {
+    const fd = new FormData(form);
+    const trainer = Auth.getTrainer();
+    const payload = {
+      title:       (fd.get('title') || '').trim(),
+      category:    fd.get('category') || '기타',
+      description: (fd.get('description') || '').trim() || null,
+      day_of_month_start: Number(fd.get('day_of_month_start')),
+      duration_days:      Number(fd.get('duration_days')),
+    };
+    if (!payload.title) { Toast.error('제목은 필수입니다.'); return; }
+    if (!(payload.day_of_month_start >= 1 && payload.day_of_month_start <= 31)) { Toast.error('시작일은 1~31 사이'); return; }
+    if (!(payload.duration_days      >= 1 && payload.duration_days      <= 31)) { Toast.error('기간은 1~31 사이'); return; }
+
+    const cleanItems = workingItems
+      .map(it => ({ ...it, content: (it.content || '').trim() }))
+      .filter(it => it.content);
+
+    try {
+      let tplId = editId;
+      if (editId) {
+        const { error } = await supabase.from('task_templates').update(payload).eq('id', editId);
+        if (error) throw error;
+      } else {
+        payload.created_by = trainer?.id || null;
+        payload.is_active = true;
+        const { data, error } = await supabase.from('task_templates').insert(payload).select('id').single();
+        if (error) throw error;
+        tplId = data.id;
+      }
+
+      // items 동기화
+      if (editId && originalItems.length) {
+        const keepIds = new Set(cleanItems.map(it => it.id).filter(x => !String(x).startsWith('tmp_')));
+        const deleteIds = originalItems.filter(o => !keepIds.has(o.id)).map(o => o.id);
+        if (deleteIds.length) {
+          const { error } = await supabase.from('task_template_items').delete().in('id', deleteIds);
+          if (error) throw error;
+        }
+      }
+      if (cleanItems.length) {
+        const rows = cleanItems.map((it, idx) => {
+          const isNew = String(it.id).startsWith('tmp_');
+          const row = { template_id: tplId, content: it.content, order_index: idx };
+          if (!isNew) row.id = it.id;
+          return row;
+        });
+        const { error } = await supabase.from('task_template_items').upsert(rows);
+        if (error) throw error;
+      }
+
+      Toast.success(editId ? '수정되었습니다' : '등록되었습니다');
+      openTemplateListModal();
+    } catch (e) {
+      console.error('template save failed:', e);
+      Toast.error('저장 실패: ' + (e.message || e));
+    }
+  }
+
+  async function handleGenerateMonthFromTemplates() {
+    const { y, m } = viewMonth;
+    const ym = `${y}-${pad(m)}`;
+    if (!confirm(`${y}년 ${m}월에 고정업무 템플릿을 일괄 생성하시겠습니까?\n(이미 생성된 템플릿은 건너뜁니다)`)) return;
+
+    // 1) active 템플릿 + 항목 로드
+    const { data: tpls, error: e1 } = await supabase
+      .from('task_templates')
+      .select('*, task_template_items(*)')
+      .eq('is_active', true);
+    if (e1) { Toast.error('템플릿 로드 실패: ' + e1.message); return; }
+    if (!tpls || !tpls.length) { Toast.info('활성화된 템플릿이 없습니다.'); return; }
+
+    // 2) 이미 이번달에 생성된 template_id 조회
+    const { data: exist, error: e2 } = await supabase
+      .from('tasks')
+      .select('template_id')
+      .eq('template_ym', ym)
+      .not('template_id', 'is', null);
+    if (e2) { Toast.error('중복 확인 실패: ' + e2.message); return; }
+    const existingIds = new Set((exist || []).map(x => x.template_id));
+
+    // 3) 미생성 템플릿들 insert
+    const trainer = Auth.getTrainer();
+    let created = 0, skipped = 0, failed = 0;
+    for (const tpl of tpls) {
+      if (existingIds.has(tpl.id)) { skipped++; continue; }
+      const day   = clampDayToMonth(tpl.day_of_month_start, y, m);
+      const start = new Date(y, m - 1, day);
+      const end   = addDays(start, (tpl.duration_days || 1) - 1);
+      const endClamped = end.getMonth() !== (m - 1)
+        ? new Date(y, m - 1, lastDayOfMonth(y, m)) // 월 넘어가면 말일로 자름
+        : end;
+
+      const taskPayload = {
+        title:        tpl.title,
+        description:  tpl.description,
+        category:     tpl.category,
+        start_date:   toYMD(start),
+        end_date:     toYMD(endClamped),
+        template_id:  tpl.id,
+        template_ym:  ym,
+        created_by:   trainer?.id || null,
+      };
+      const { data: inserted, error } = await supabase.from('tasks').insert(taskPayload).select('id').single();
+      if (error) { console.error('task create failed:', error); failed++; continue; }
+
+      const tplItems = (tpl.task_template_items || []).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      if (tplItems.length) {
+        const rows = tplItems.map((it, idx) => ({
+          task_id: inserted.id, content: it.content, order_index: idx, is_done: false,
+        }));
+        const { error: e3 } = await supabase.from('task_items').insert(rows);
+        if (e3) console.error('items create failed:', e3);
+      }
+      created++;
+    }
+
+    const msg = `생성 ${created}건${skipped ? ` · 이미 있음 ${skipped}건` : ''}${failed ? ` · 실패 ${failed}건` : ''}`;
+    if (failed > 0) Toast.error(msg); else Toast.success(msg);
     await Promise.all([refreshCalendar(), refreshPool()]);
   }
 

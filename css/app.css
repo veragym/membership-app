@@ -4085,6 +4085,40 @@ html, body {
   text-decoration: line-through;
 }
 
+/* ─── 매월 고정업무 템플릿 관리 모달 ─── */
+.plan-tpl-list-wrap { display: flex; flex-direction: column; gap: 12px; }
+.plan-tpl-list-hdr {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.plan-tpl-list-hint { font-size: 12px; color: var(--color-text-muted); }
+.plan-tpl-list {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-height: 440px;
+  overflow-y: auto;
+}
+.plan-tpl-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-bg-1);
+}
+.plan-tpl-row:last-child { border-bottom: none; }
+.plan-tpl-row.is-inactive { opacity: .5; }
+.plan-tpl-row-main { flex: 1 1 auto; min-width: 0; }
+.plan-tpl-row-title { font-size: 13px; font-weight: 700; color: var(--color-text-primary); }
+.plan-tpl-row-meta  { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+.plan-tpl-active-toggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.plan-tpl-active-toggle input { margin: 0; cursor: pointer; }
+.plan-tpl-list-footer { display: flex; justify-content: flex-end; }
+
 /* ─── Task 편집 모달 내부 체크리스트 에디터 ─── */
 .plan-task-form .form-row-2 {
   display: grid;
