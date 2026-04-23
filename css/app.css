@@ -2888,6 +2888,18 @@ html, body {
 @media (max-width: 1100px) {
   .ops-bottom-row { grid-template-columns: 1fr; }
 }
+/* 금일 업무 패널 — 시간 일정과 여백/선 일관성 맞춤 */
+#opsTodayTasks .plan-pool-group { border-bottom: 1px solid var(--color-divider); }
+#opsTodayTasks .plan-pool-group:last-child { border-bottom: none; }
+#opsTodayTasks .plan-pool-group-hdr {
+  padding: 12px 14px 8px 14px;
+}
+#opsTodayTasks .plan-pool-items {
+  padding-bottom: 6px;
+}
+#opsTodayTasks .plan-pool-item {
+  padding: 8px 14px;
+}
 .ops-panel {
   background: var(--color-bg-1);
   border: 1px solid var(--color-border);
