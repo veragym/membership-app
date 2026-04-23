@@ -2150,59 +2150,31 @@ html, body {
 .stats-mini-period { font-size: 11px; color: var(--color-text-muted); }
 .stats-mini-amount { font-size: 15px; font-weight: 700; color: var(--color-text-primary); }
 
-/* 우측 패널 (탭 포함) */
-.stats-right-panel { overflow: hidden; display: flex; flex-direction: column; }
-.stats-right-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 8px;
-  margin-bottom: 10px;
-  flex-shrink: 0;
-}
-.stats-right-tab {
-  padding: 4px 14px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: inherit;
-  transition: all .12s;
-}
-.stats-right-tab.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
-.stats-right-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-
-/* 평균매출 패널 */
-.avg-total-block {
-  background: var(--color-bg-2);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
+/* 우측 평균매출 스택 */
+.stats-avg-stack {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+.stats-avg-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.stats-avg-card { flex: 1; }
+.stats-avg-card-title {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--color-text-primary);
 }
-.avg-total-row { display: flex; justify-content: space-between; align-items: center; }
-.avg-total-label { font-size: 12px; color: var(--color-text-secondary); }
-.avg-total-val { font-size: 15px; font-weight: 700; color: var(--color-primary); }
-.avg-period-controls { display: flex; gap: 6px; flex-wrap: wrap; }
-.avg-period-result {
-  background: var(--color-bg-2);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  flex: 1;
-}
-.avg-period-label { font-size: 12px; font-weight: 700; color: var(--color-text-secondary); margin-bottom: 10px; }
-.avg-elapsed { font-weight: 400; color: var(--color-text-muted); }
-.avg-period-rows { display: flex; flex-direction: column; gap: 5px; }
-.avg-period-row { display: flex; justify-content: space-between; font-size: 13px; }
-.avg-period-row span { color: var(--color-text-secondary); }
-.avg-period-row b { font-weight: 600; }
-.avg-accent b { color: var(--color-primary); font-size: 14px; }
-.avg-total b { font-size: 14px; }
-.avg-total.avg-accent b { font-size: 15px; }
+.stats-avg-card-body { display: flex; flex-direction: column; gap: 6px; }
+.avg-period-label { font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px; }
+.avg-elapsed { color: var(--color-text-muted); }
+.avg-stat-row { display: flex; justify-content: space-between; font-size: 13px; }
+.avg-stat-row span { color: var(--color-text-secondary); }
+.avg-stat-row b { font-weight: 600; }
+.avg-stat-row.avg-accent b { color: var(--color-primary); font-size: 15px; font-weight: 700; }
+.avg-all { color: var(--color-text-muted) !important; font-size: 12px !important; }
 .stats-staff-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .stats-staff-tabs {
   display: flex;
