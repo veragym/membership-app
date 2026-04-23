@@ -241,8 +241,24 @@ const StatsTab = (() => {
   }
 
   async function loadProducts() {
-    const { data } = await supabase.from('registrations').select('product').not('product', 'is', null);
-    allProducts = [...new Set((data || []).map(r => r.product))].sort();
+    // 우선 설정(dropdown_options.회원권상품)에서 상품 목록을 가져온다.
+    // 실제 매출에 사용된 상품도 합쳐서, 설정에서 삭제된 과거 상품도 필터 칩에 남게 한다.
+    const [{ data: dropData }, { data: regData }] = await Promise.all([
+      supabase.from('dropdown_options')
+        .select('value, sort_order')
+        .eq('category', '회원권상품')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
+      supabase.from('registrations').select('product').not('product', 'is', null)
+    ]);
+    const fromSettings = (dropData || []).map(r => r.value);
+    const fromRegs = (regData || []).map(r => r.product);
+    // 설정 순서 유지 + 설정에 없는 과거 상품을 뒤에 붙여준다
+    const seen = new Set();
+    const merged = [];
+    fromSettings.forEach(v => { if (!seen.has(v)) { seen.add(v); merged.push(v); } });
+    [...new Set(fromRegs)].sort().forEach(v => { if (!seen.has(v)) { seen.add(v); merged.push(v); } });
+    allProducts = merged;
   }
 
   async function fetchTargets(weekStart) {
