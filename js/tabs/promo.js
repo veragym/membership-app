@@ -102,6 +102,15 @@ const PromoTab = (() => {
           </div>
           <div class="ops-panel">
             <div class="ops-panel-header">
+              <span class="ops-panel-title">금일 업무</span>
+              <span style="font-size:11px;color:var(--color-text-muted)">업무계획 탭에서 등록된 업무 · 체크하면 즉시 저장</span>
+            </div>
+            <div class="ops-panel-body" id="opsTodayTasks">
+              <div class="ops-placeholder">불러오는 중…</div>
+            </div>
+          </div>
+          <div class="ops-panel">
+            <div class="ops-panel-header">
               <span class="ops-panel-title">시간 일정 (오늘 이후)</span>
               <div class="ops-upcoming-actions">
                 <button type="button" class="btn-upcoming-action" id="btnUpcomingDelSelected" disabled>선택삭제</button>
@@ -120,6 +129,7 @@ const PromoTab = (() => {
     document.getElementById('btnUpcomingDelAll').addEventListener('click', handleUpcomingDeleteAll);
     renderReservations();
     loadScheduleView();
+    loadTodayTasks();
   }
 
   // ═══ 날짜/시간 헬퍼 ═══
@@ -161,6 +171,134 @@ const PromoTab = (() => {
     }
     renderCalGrid(dates);
     renderUpcoming();
+  }
+
+  // ═══ 금일 업무 (업무계획 탭에서 등록된 Task 중 오늘이 기간에 포함된 것) ═══
+  // 데이터 모델: tasks(id, title, category, start_date, end_date, status) + task_items(id, task_id, order_index, content, is_done)
+  const TODAY_TASK_CATEGORY_COLORS = {
+    '홍보': '#EC4899', '이벤트': '#F59E0B', '발주': '#10B981',
+    '유지보수': '#3B82F6', '기타': '#6B7280'
+  };
+  // 'YYYY-MM-DD' → 'M/D'
+  function shortYMD(ymd) {
+    if (!ymd) return '';
+    const p = String(ymd).split('-');
+    if (p.length < 3) return ymd;
+    return `${Number(p[1])}/${Number(p[2])}`;
+  }
+
+  async function loadTodayTasks() {
+    const body = document.getElementById('opsTodayTasks');
+    if (!body) return;
+    const todayYMD = toYMD(new Date());
+
+    const { data, error } = await supabase
+      .from('task_items')
+      .select('id, task_id, order_index, content, is_done, tasks(id, title, category, start_date, end_date, status)')
+      .order('order_index')
+      .limit(1000);
+
+    if (error) {
+      console.error('today tasks fetch failed:', error);
+      body.innerHTML = `<div class="ops-placeholder">업무를 불러오지 못했습니다: ${esc(error.message)}</div>`;
+      return;
+    }
+
+    const rows = (data || []).filter(it =>
+      it.tasks &&
+      it.tasks.status !== 'cancelled' &&
+      it.tasks.status !== 'archived' &&
+      it.tasks.start_date <= todayYMD &&
+      it.tasks.end_date   >= todayYMD
+    );
+
+    if (!rows.length) {
+      body.innerHTML = `<div class="ops-placeholder">오늘 진행 중인 업무가 없습니다.</div>`;
+      return;
+    }
+
+    // Task별 그룹핑
+    const groupMap = {};
+    rows.forEach(it => {
+      const key = it.task_id;
+      if (!groupMap[key]) groupMap[key] = { task: it.tasks, items: [] };
+      groupMap[key].items.push(it);
+    });
+    Object.values(groupMap).forEach(g => {
+      g.items.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      g.total = g.items.length;
+      g.done  = g.items.filter(x => x.is_done).length;
+      g.isComplete = g.total > 0 && g.done === g.total;
+    });
+
+    // 정렬: 미완료 우선 → 종료일 빠른 순 → 시작일 빠른 순
+    const groups = Object.values(groupMap).sort((a, b) => {
+      if (a.isComplete !== b.isComplete) return a.isComplete ? 1 : -1;
+      const ea = a.task?.end_date || '9999-12-31';
+      const eb = b.task?.end_date || '9999-12-31';
+      if (ea !== eb) return ea < eb ? -1 : 1;
+      const sa = a.task?.start_date || '9999-12-31';
+      const sb = b.task?.start_date || '9999-12-31';
+      if (sa !== sb) return sa < sb ? -1 : 1;
+      return 0;
+    });
+
+    body.innerHTML = groups.map(g => {
+      const t = g.task;
+      const color = TODAY_TASK_CATEGORY_COLORS[t.category] || TODAY_TASK_CATEGORY_COLORS['기타'];
+      const pct = g.total > 0 ? Math.round((g.done / g.total) * 100) : 0;
+      const completeCls = g.isComplete ? 'is-complete' : '';
+      const completeBadge = g.isComplete ? `<span class="plan-pool-done-badge">완료</span>` : '';
+      return `
+        <div class="plan-pool-group ${completeCls}" data-task-id="${t.id}">
+          <div class="plan-pool-group-hdr">
+            <div class="plan-pool-group-main">
+              <div class="plan-pool-group-line1">
+                <span class="plan-pool-chip" style="background:${color}">${esc(t.category || '기타')}</span>
+                <span class="plan-pool-group-title" title="${esc(t.title)}">${esc(t.title)}</span>
+                ${completeBadge}
+              </div>
+              <div class="plan-pool-group-line2">
+                <span class="plan-pool-group-count">${pct}%</span>
+                <span class="plan-pool-group-meta">${shortYMD(t.start_date)} ~ ${shortYMD(t.end_date)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="plan-pool-items">
+            ${g.items.map(it => `
+              <label class="plan-pool-item ${it.is_done ? 'is-done' : ''}">
+                <input type="checkbox" class="ops-today-check" data-id="${it.id}" ${it.is_done ? 'checked' : ''}>
+                <span class="plan-pool-item-text">${esc(it.content || '')}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    body.querySelectorAll('.ops-today-check').forEach(cb => {
+      cb.addEventListener('change', () => handleTodayTaskToggle(cb.dataset.id, cb.checked, cb));
+    });
+  }
+
+  async function handleTodayTaskToggle(itemId, checked, cbEl) {
+    const trainer = (typeof Auth !== 'undefined' && Auth.getTrainer) ? Auth.getTrainer() : null;
+    const patch = { is_done: checked };
+    if (checked && trainer?.id) patch.done_by = trainer.id;
+
+    const row = cbEl.closest('.plan-pool-item');
+    if (row) row.style.opacity = '.5';
+
+    const { error } = await supabase.from('task_items').update(patch).eq('id', itemId);
+    if (error) {
+      console.error('today task toggle failed:', error);
+      Toast.error('체크 반영 실패: ' + error.message);
+      if (row) row.style.opacity = '';
+      cbEl.checked = !checked;
+      return;
+    }
+    Toast.success(checked ? '완료 처리되었습니다' : '완료 해제되었습니다');
+    await loadTodayTasks();
   }
 
   function renderCalGrid(dates) {
