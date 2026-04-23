@@ -3181,6 +3181,7 @@ html, body {
 .sched-form .form-row input[type="text"],
 .sched-form .form-row input[type="date"],
 .sched-form .form-row input[type="time"],
+.sched-form .form-row select,
 .sched-form .form-row textarea {
   width: 100%;
   padding: 9px 12px;
@@ -3193,10 +3194,22 @@ html, body {
   box-sizing: border-box;
 }
 .sched-form .form-row input:focus,
+.sched-form .form-row select:focus,
 .sched-form .form-row textarea:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+/* select 기본 화살표 제거 후 커스텀 ∨ 아이콘 */
+.sched-form .form-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%236B7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
 }
 .sched-form .form-row-2 {
   display: grid;
