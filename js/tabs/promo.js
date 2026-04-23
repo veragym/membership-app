@@ -25,6 +25,7 @@ const PromoTab = (() => {
   let scheduleData = [];
   let reservations = [];
   let _suggestionTimer = null;
+  let opsRefreshTimer = null;
 
   function init() {
     reservations = loadReservations();
@@ -132,6 +133,23 @@ const PromoTab = (() => {
     renderReservations();
     loadScheduleView();
     loadTodayTasks();
+    startOpsRefreshTimer();
+  }
+
+  // 1분마다 현재 시각 기준으로 달력·리스트 재렌더 (종료 시각 경과 반영)
+  function startOpsRefreshTimer() {
+    stopOpsRefreshTimer();
+    opsRefreshTimer = setInterval(() => {
+      if (activeSubTab !== 'ops' || !document.getElementById('opsCalGrid')) {
+        stopOpsRefreshTimer();
+        return;
+      }
+      renderCalGrid(getCalDates());
+      renderUpcoming();
+    }, 60000);
+  }
+  function stopOpsRefreshTimer() {
+    if (opsRefreshTimer) { clearInterval(opsRefreshTimer); opsRefreshTimer = null; }
   }
 
   // ═══ 날짜/시간 헬퍼 ═══
@@ -354,7 +372,8 @@ const PromoTab = (() => {
         const evBg = s.color || TYPE_COLORS[sType] || TYPE_COLORS['업무'];
         const title = s.title || sType;
         const sub = s.notes || (s.title ? sType : '');
-        col += `<div class="ops-cal-event" style="background:${evBg}dd;top:${top}px;height:${height}px;" data-sched-id="${s.id}">
+        const past = isSchedPast(s, now);
+        col += `<div class="ops-cal-event${past ? ' is-past' : ''}" style="background:${evBg}dd;top:${top}px;height:${height}px;" data-sched-id="${s.id}">
           <div class="ops-cal-event-title">${esc(title)}</div>
           ${sub ? `<div class="ops-cal-event-sub">${esc(sub)}</div>` : ''}
         </div>`;
@@ -659,13 +678,28 @@ const PromoTab = (() => {
     `;
   }
 
+  // 스케줄 한 건이 이미 종료되었는지 (오늘 날짜이고 end_time ≤ 현재 시각)
+  function isSchedPast(s, now) {
+    if (!s || !s.sched_date) return false;
+    const todayYMD = toYMD(now);
+    if (s.sched_date < todayYMD) return true;
+    if (s.sched_date > todayYMD) return false;
+    // 오늘 날짜 — end_time 기준 비교 (end_time 없으면 start_time + 30min)
+    const endStr = s.end_time ? s.end_time.slice(0, 5) : addMinutes((s.start_time || '00:00').slice(0, 5), 30);
+    const [eh, em] = endStr.split(':').map(Number);
+    const endMin = eh * 60 + em;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    return endMin <= nowMin;
+  }
+
   // ═══ 예정 업무 리스트 ═══
   function renderUpcoming() {
     const el = document.getElementById('opsUpcomingList');
     if (!el) return;
     const delAllBtn = document.getElementById('btnUpcomingDelAll');
-    const todayYMD = toYMD(new Date());
-    const upcoming = scheduleData.filter(s => s.sched_date >= todayYMD);
+    const now = new Date();
+    // 종료 시각 지난 건은 리스트에서 자동 제외 (DB는 유지 → 달력에는 faded로 표시)
+    const upcoming = scheduleData.filter(s => !isSchedPast(s, now));
     if (!upcoming.length) {
       el.innerHTML = '<div class="ops-placeholder">예정된 업무가 없습니다.</div>';
       if (delAllBtn) delAllBtn.disabled = true;

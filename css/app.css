@@ -3087,6 +3087,17 @@ html, body {
   width: 100%;
   font-weight: 600;
 }
+/* 종료된 이벤트 — 흐리게, 취소선으로 완료 느낌 */
+.ops-cal-event.is-past {
+  opacity: 0.35;
+  filter: grayscale(0.3);
+}
+.ops-cal-event.is-past .ops-cal-event-title {
+  text-decoration: line-through;
+}
+.ops-cal-event.is-past:hover {
+  opacity: 0.65;
+}
 
 @media (max-width: 900px) {
   .ops-layout { grid-template-columns: 1fr; }
