@@ -163,7 +163,6 @@ const PtTab = (() => {
                 ? `<button class="btn-action btn-sync-done" data-id="${r.id}" title="이미 동기화됨">동기화 완료</button>`
                 : `<button class="btn-action btn-retry" data-id="${r.id}">동기화</button>`}
               <button class="btn-action btn-edit" data-id="${r.id}">수정</button>
-              <button class="btn-action btn-delete" data-id="${r.id}" title="PT 등록 삭제">삭제</button>
             </div>
           </div>
         </div>
@@ -211,14 +210,6 @@ const PtTab = (() => {
         if (rec) openPtForm(null, rec);
       });
     });
-
-    // 삭제 버튼 바인딩
-    listEl.querySelectorAll('.btn-delete').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const rec = allPtRegs.find(r => r.id === btn.dataset.id);
-        if (rec) deletePt(rec);
-      });
-    });
   }
 
   // ────────── PT 등록 삭제 ──────────
@@ -238,6 +229,7 @@ const PtTab = (() => {
       return;
     }
     Toast.success('PT 등록 삭제됨');
+    Modal.close();
     await loadPtRegistrations();
   }
 
@@ -412,13 +404,21 @@ const PtTab = (() => {
               </select>
             </div>
           </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
-            <button type="submit" class="btn btn-primary">${isEdit ? '수정' : '등록'}</button>
+          <div class="form-actions${isEdit ? ' spt-edit-actions' : ''}">
+            ${isEdit ? '<button type="button" class="btn btn-danger pt-delete-btn">PT 삭제</button>' : ''}
+            <div${isEdit ? ' class="spt-edit-actions-right"' : ''}>
+              <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+              <button type="submit" class="btn btn-primary">${isEdit ? '수정' : '등록'}</button>
+            </div>
           </div>
         </form>
       `,
       onOpen: (el) => {
+        // 수정 모드: PT 삭제 버튼 바인딩 (SPT 패턴과 동일)
+        if (isEdit) {
+          const delBtn = el.querySelector('.pt-delete-btn');
+          if (delBtn) delBtn.addEventListener('click', () => deletePt(editRecord));
+        }
         // v7: PT상품 드롭다운 제거 (횟수와 의미 중복 — 사용자 확정 2026-04-19)
         const ptCountInput = el.querySelector('input[name="pt_count"]');
         const sessionPriceInput = el.querySelector('input[name="session_price"]');

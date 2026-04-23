@@ -319,7 +319,6 @@ const InquiryTab = (() => {
           <button class="btn-action btn-tm">TM</button>
           ${inq.status === 'unregistered' ? '<button class="btn-action btn-register">+등록</button>' : ''}
           ${inq.status === 'registered' ? '<button class="btn-action btn-pt">+PT</button>' : ''}
-          <button class="btn-action btn-delete" title="문의 삭제">삭제</button>
         </div>`;
 
     // 등록 정보 6셀 — 미등록이면 모두 "-"
@@ -368,11 +367,6 @@ const InquiryTab = (() => {
       const ptBtn = row.querySelector('.btn-pt');
       if (ptBtn) ptBtn.addEventListener('click', () => {
         if (typeof PtTab !== 'undefined') PtTab.openPtForm({ name: inq.name, phone: inq.phone });
-      });
-      const delBtn = row.querySelector('.btn-delete');
-      if (delBtn) delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteInquiry(inq);
       });
     }
 
@@ -589,15 +583,24 @@ const InquiryTab = (() => {
           <p style="font-size:11px; color:var(--color-text-muted); margin-top:-8px; margin-bottom:12px;">
             * 담당자 정보는 회원권 등록 시([+등록] 버튼) 함께 저장됩니다. 미등록 문의에는 반영되지 않습니다.
           </p>` : ''}
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
-            <button type="submit" class="btn btn-primary">${isEdit ? '수정' : '저장'}</button>
+          <div class="form-actions${isEdit ? ' spt-edit-actions' : ''}">
+            ${isEdit ? '<button type="button" class="btn btn-danger inquiry-delete-btn">문의 삭제</button>' : ''}
+            <div${isEdit ? ' class="spt-edit-actions-right"' : ''}>
+              <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+              <button type="submit" class="btn btn-primary">${isEdit ? '수정' : '저장'}</button>
+            </div>
           </div>
         </form>
       `,
       onOpen: (el) => {
         // 전화번호 자동 포맷
         bindPhoneFormat(el.querySelector('input[name="phone"]'));
+
+        // 수정 모드: 삭제 버튼 바인딩 (SPT와 동일 패턴)
+        if (isEdit) {
+          const delBtn = el.querySelector('.inquiry-delete-btn');
+          if (delBtn) delBtn.addEventListener('click', () => deleteInquiry(existing));
+        }
 
         // 신규 추가 모드: 이름/전화번호 자동완성 (inquiries 테이블 기존 기록 검색)
         if (!isEdit) bindInquiryAutocomplete(el);
@@ -977,6 +980,7 @@ const InquiryTab = (() => {
         ? `문의 삭제됨 (등록 정보${ptDel ? ` + PT ${ptDel}건` : ''} 함께 삭제)`
         : '문의 삭제됨'
     );
+    Modal.close();
     await loadInquiries();
   }
 
