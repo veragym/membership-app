@@ -449,7 +449,10 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
       5) 페이지 번호/다음 버튼 클릭 → 반복 (MAX_PAGES)
       6) 광고 아닌 카드만 DOM 등장순으로 반환
     """
-    url = f"https://map.naver.com/p/search/{keyword}?searchType=place"
+    # c=14.00,0,0,0,dh = 하남(dh) 지역, 줌14로 지역 필터링.
+    # 이 파라미터 없으면 네이버가 전국 헬스장 + 무관업종(세탁공장/디자인오피스 등)까지
+    # 관련도 낮은 순으로 섞어서 결과를 내므로 베라짐 같은 특정 지점이 누락됨.
+    url = f"https://map.naver.com/p/search/{keyword}?searchType=place&c=14.00,0,0,0,dh"
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     # 첫 키워드 cold start 대응 — 좀 더 여유 있게 대기
     await asyncio.sleep(random.uniform(3.5, 5.0))
