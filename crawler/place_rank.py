@@ -43,15 +43,15 @@ TARGET_NAME = "베라짐"   # 카드 이름 매칭 키워드
 BRANCH_KEYWORDS = {"미사": "misa", "동탄": "dongtan"}
 
 UA_POOL = [
-    # iOS Safari
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-    # Android Chrome
-    "Mozilla/5.0 (Linux; Android 14; SM-S928N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.71 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 13; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.103 Mobile Safari/537.36",
-    # 네이버 인앱
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 NAVER(inapp; search; 2000; 12.7.4)",
+    # Desktop Chrome (Windows)
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    # Desktop Edge
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0",
+    # Desktop Safari (macOS)
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+    # Desktop Firefox
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
 ]
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -270,13 +270,14 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
       4) 더 이상 다음 페이지 없거나 최대 MAX_PAGES(8) 도달 시 종료
       5) 이름 기준 중복 제거 후 DOM 등장순으로 반환
     """
-    url = f"https://m.search.naver.com/search.naver?where=m&query={keyword}"
+    # PC 버전 URL 사용 — 모바일 버전은 '< 1/5 >' pagination이 없음
+    url = f"https://search.naver.com/search.naver?query={keyword}"
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     await asyncio.sleep(random.uniform(1.8, 2.6))
 
-    # 지도/플레이스 섹션이 뷰포트에 들어오도록 약간 스크롤
-    for _ in range(random.randint(3, 6)):
-        await page.mouse.wheel(0, 700)
+    # 플레이스 섹션이 뷰포트에 들어오도록 스크롤 (PC는 더 큰 화면이므로 많이 스크롤)
+    for _ in range(random.randint(5, 8)):
+        await page.mouse.wheel(0, 800)
         await asyncio.sleep(random.uniform(0.4, 0.8))
 
     all_cards: list[dict] = []
@@ -332,7 +333,7 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
         user_agent=ua,
         locale="ko-KR",
         timezone_id="Asia/Seoul",
-        viewport={"width": 390, "height": 844},
+        viewport={"width": 1440, "height": 900},
         extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"},
     )
     page = await ctx.new_page()
