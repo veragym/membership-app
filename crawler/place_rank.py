@@ -222,6 +222,40 @@ async def click_next_page(page) -> tuple[bool, str | None]:
     return bool(clicked_sel), clicked_sel
 
 
+async def debug_dump_cards(page, keyword: str, label: str = ""):
+    """페이지 상에 존재하는 '플레이스스러운' li 엘리먼트들을 덤프. 카드 셀렉터 발굴용."""
+    info = await page.evaluate(
+        """
+        () => {
+          const allLi = Array.from(document.querySelectorAll('li'));
+          const candidates = [];
+          for (const li of allLi) {
+            const cls = (li.className || '').toString();
+            const text = (li.innerText || '').trim();
+            if (text.length < 10) continue;
+            // 플레이스/헬스/영업 관련 힌트가 있는 li만
+            const hint = /헬스|영업|예약|플레이스|place|VLTHu|lst_|_item|apollo|spot/.test(cls) ||
+                         /영업 중|영업종료|영업시간|예약|리뷰/.test(text);
+            if (!hint) continue;
+            const rect = li.getBoundingClientRect();
+            candidates.push({
+              class: cls.slice(0, 80),
+              textHead: text.replace(/\\n+/g, ' | ').slice(0, 80),
+              y: Math.round(rect.top + (window.scrollY||0)),
+              parentClass: ((li.parentElement && li.parentElement.className) || '').toString().slice(0, 60),
+            });
+            if (candidates.length >= 12) break;
+          }
+          return candidates;
+        }
+        """
+    )
+    tag = f" ({label})" if label else ""
+    print(f"[{keyword}] card candidates{tag} ({len(info)}):")
+    for i, c in enumerate(info):
+        print(f"  {i+1}. y={c['y']} parent='{c['parentClass']}' class='{c['class']}' text='{c['textHead']}'")
+
+
 async def debug_dump_pagination(page, keyword: str):
     """pagination 버튼 후보들을 덤프. 셀렉터 발굴용 디버그 함수."""
     info = await page.evaluate(
@@ -299,9 +333,13 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
 
         print(f"[{keyword}] page {page_num}: page_cards={len(page_cards)}, new={new_this_round}, total={len(all_cards)}")
 
-        # 첫 페이지에서 pagination 후보 덤프 (디버깅용)
+        # 첫 페이지에서 pagination + 카드 후보 덤프 (디버깅용)
         if page_num == 1:
             await debug_dump_pagination(page, keyword)
+            await debug_dump_cards(page, keyword, label="before-click")
+        elif page_num == 2:
+            # 클릭 이후 카드가 실제로 바뀌는지 확인용
+            await debug_dump_cards(page, keyword, label="after-1st-click")
 
         if page_num >= MAX_PAGES:
             break
