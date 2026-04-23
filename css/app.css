@@ -2117,13 +2117,92 @@ html, body {
   /* v4: 매출추이 탭 하단까지 3분할 확장 */
   min-height: calc(100vh - 260px);
 }
-.stats-compare-stack {
+/* 전월/전년 FC/PT 2×2 미니카드 */
+.stats-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+}
+.stats-mini-card {
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
-.stats-compare-stack .stats-card-v2 { flex: 1; }
-.stats-staff-panel { overflow: hidden; }
+.stats-mini-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.stats-mini-type {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.stats-mini-type.fc { background: #EFF6FF; color: #2563EB; }
+.stats-mini-type.pt { background: #F0FDF4; color: #16A34A; }
+.stats-mini-period { font-size: 11px; color: var(--color-text-muted); }
+.stats-mini-amount { font-size: 15px; font-weight: 700; color: var(--color-text-primary); }
+
+/* 우측 패널 (탭 포함) */
+.stats-right-panel { overflow: hidden; display: flex; flex-direction: column; }
+.stats-right-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.stats-right-tab {
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  transition: all .12s;
+}
+.stats-right-tab.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.stats-right-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+/* 평균매출 패널 */
+.avg-total-block {
+  background: var(--color-bg-2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.avg-total-row { display: flex; justify-content: space-between; align-items: center; }
+.avg-total-label { font-size: 12px; color: var(--color-text-secondary); }
+.avg-total-val { font-size: 15px; font-weight: 700; color: var(--color-primary); }
+.avg-period-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.avg-period-result {
+  background: var(--color-bg-2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  flex: 1;
+}
+.avg-period-label { font-size: 12px; font-weight: 700; color: var(--color-text-secondary); margin-bottom: 10px; }
+.avg-elapsed { font-weight: 400; color: var(--color-text-muted); }
+.avg-period-rows { display: flex; flex-direction: column; gap: 5px; }
+.avg-period-row { display: flex; justify-content: space-between; font-size: 13px; }
+.avg-period-row span { color: var(--color-text-secondary); }
+.avg-period-row b { font-weight: 600; }
+.avg-accent b { color: var(--color-primary); font-size: 14px; }
+.avg-total b { font-size: 14px; }
+.avg-total.avg-accent b { font-size: 15px; }
 .stats-staff-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .stats-staff-tabs {
   display: flex;
