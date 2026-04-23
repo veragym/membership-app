@@ -178,23 +178,30 @@ CARD_EXTRACT_JS = """
 """
 
 
-async def click_next_page(page) -> bool:
-    """플레이스 위젯의 '다음 페이지' 버튼 클릭 시도. 성공 시 True."""
+async def click_next_page(page) -> tuple[bool, str | None]:
+    """플레이스 위젯의 '다음 페이지' 버튼 클릭 시도. 성공 시 (True, selector).
+
+    보수적 접근: 명시적으로 플레이스/지도 관련 셀렉터만 사용.
+    일반 텍스트 매칭은 하지 않는다 (잘못된 버튼 클릭해 DOM 파괴 방지).
+    """
     clicked_sel = await page.evaluate(
         """
         () => {
-          // 네이버 모바일 통합검색 플레이스 위젯 pagination
-          // 일반적으로 '다음'/'next' 텍스트 또는 오른쪽 화살표 아이콘
+          // 네이버 모바일 통합검색 플레이스 위젯 pagination — 검증된 셀렉터만
           const selectors = [
-            'a._btn_next:not([aria-disabled="true"])',
-            'a.btn_next:not([aria-disabled="true"])',
-            'button._btn_next:not(:disabled)',
-            'button.btn_next:not(:disabled)',
-            'a[role="button"][aria-label*="다음"]',
-            'button[aria-label*="다음"]',
-            // 플레이스 위젯 전용
+            // 플레이스 위젯 flicking UI
             '.api_flicking_wrap a.flick_next:not(.disabled)',
-            '.tit_map_area + div a.btn_next',
+            '.api_flicking_wrap button.flick_next:not(:disabled)',
+            // 플레이스 섹션 하단 페이지네이션
+            '.sc_new.sp_nx_map a.pg_next:not(.on)',
+            '.place_section a.pg_next:not(.on)',
+            // 지도(map) 섹션 공통
+            '.map_place_section a.btn_arr_next:not([aria-disabled="true"])',
+            // Naver 신 플레이스 위젯 (2024~)
+            'a.n79VT:not([aria-disabled="true"])',
+            // aria 기반 — 단, 반드시 플레이스/지도 섹션 내부
+            '.place_section a[aria-label*="다음"]',
+            '.sc_new a[aria-label*="다음"]',
           ];
           for (const sel of selectors) {
             const els = document.querySelectorAll(sel);
@@ -202,21 +209,11 @@ async def click_next_page(page) -> bool:
               if (el.offsetParent === null) continue;
               if (el.disabled) continue;
               if (el.getAttribute('aria-disabled') === 'true') continue;
+              const rect = el.getBoundingClientRect();
+              if (rect.width === 0 || rect.height === 0) continue;
               el.scrollIntoView({block: 'center'});
               el.click();
               return sel;
-            }
-          }
-          // 최후 수단: '다음' 텍스트가 있는 anchor/button 찾기
-          const allBtns = Array.from(document.querySelectorAll('a, button'));
-          for (const el of allBtns) {
-            const t = (el.innerText || el.getAttribute('aria-label') || '').trim();
-            if (t === '다음' || t === 'Next' || t === '다음 페이지') {
-              if (el.offsetParent === null) continue;
-              if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
-              el.scrollIntoView({block: 'center'});
-              el.click();
-              return 'text-match:' + t;
             }
           }
           return null;
@@ -224,6 +221,43 @@ async def click_next_page(page) -> bool:
         """
     )
     return bool(clicked_sel), clicked_sel
+
+
+async def debug_dump_pagination(page, keyword: str):
+    """pagination 버튼 후보들을 덤프. 셀렉터 발굴용 디버그 함수."""
+    info = await page.evaluate(
+        """
+        () => {
+          const candidates = [];
+          // 화살표/페이지 관련 가능성 있는 엘리먼트 후보
+          const sel = 'a, button, [role="button"]';
+          const all = Array.from(document.querySelectorAll(sel));
+          for (const el of all) {
+            const cls = el.className || '';
+            const text = (el.innerText || '').trim().slice(0, 20);
+            const aria = el.getAttribute('aria-label') || '';
+            const key = (cls + ' ' + text + ' ' + aria).toLowerCase();
+            if (key.includes('다음') || key.includes('next') || key.includes('nxt') ||
+                key.includes('arr_next') || key.includes('pg_') || key.includes('flick') ||
+                key.includes('btn_n') || key.includes('page')) {
+              const rect = el.getBoundingClientRect();
+              candidates.push({
+                tag: el.tagName,
+                class: cls.toString().slice(0, 100),
+                text: text,
+                aria: aria,
+                visible: el.offsetParent !== null && rect.width > 0 && rect.height > 0,
+              });
+              if (candidates.length >= 20) break;
+            }
+          }
+          return candidates;
+        }
+        """
+    )
+    print(f"[{keyword}] pagination candidates ({len(info)}):")
+    for i, c in enumerate(info):
+        print(f"  {i+1}. <{c['tag']}> class='{c['class']}' text='{c['text']}' aria='{c['aria']}' visible={c['visible']}")
 
 
 async def scroll_and_collect(page, keyword: str) -> list[dict]:
@@ -247,7 +281,7 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
 
     all_cards: list[dict] = []
     seen_names: set[str] = set()
-    MAX_PAGES = 8
+    MAX_PAGES = 6
 
     for page_num in range(1, MAX_PAGES + 1):
         await asyncio.sleep(random.uniform(0.8, 1.4))
@@ -265,25 +299,21 @@ async def scroll_and_collect(page, keyword: str) -> list[dict]:
 
         print(f"[{keyword}] page {page_num}: page_cards={len(page_cards)}, new={new_this_round}, total={len(all_cards)}")
 
+        # 첫 페이지에서 pagination 후보 덤프 (디버깅용)
+        if page_num == 1:
+            await debug_dump_pagination(page, keyword)
+
         if page_num >= MAX_PAGES:
             break
 
-        # 다음 페이지 버튼 클릭 시도
+        # 다음 페이지 버튼 클릭 시도 (보수적 셀렉터만)
         ok, sel = await click_next_page(page)
         if not ok:
-            print(f"[{keyword}] no more pages (next btn not found at page {page_num})")
+            print(f"[{keyword}] no more pages — next btn not found at page {page_num}")
             break
+        print(f"[{keyword}] clicked next via '{sel}'")
         # 버튼 클릭 후 새 카드 렌더 대기
         await asyncio.sleep(random.uniform(1.5, 2.5))
-
-        # 카드 렌더 감지 (최대 추가 3초 대기)
-        for _ in range(6):
-            check = await page.evaluate(
-                "() => document.querySelectorAll('li.VLTHu, li.bx').length"
-            )
-            if check >= 1:
-                break
-            await asyncio.sleep(0.5)
 
     return all_cards
 
