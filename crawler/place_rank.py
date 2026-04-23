@@ -569,15 +569,13 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
         organic_cards = total_cards - ad_cards
         print(f"[{keyword}] collected={total_cards} (organic={organic_cards}, ads={ad_cards})")
 
-        # 수집 이름 상위 20개 덤프 (베라짐 어디 있는지 사용자 확인용)
-        print(f"[{keyword}] collected names (first 20):")
-        for i, c in enumerate(cards[:20], start=1):
+        # 수집 이름 전부 덤프 (베라짐 어디 있는지 사용자 확인용)
+        print(f"[{keyword}] collected names (all {total_cards}):")
+        for i, c in enumerate(cards, start=1):
             ad_mark = " [AD]" if c.get("is_ad") else ""
             nm = (c.get("name") or "")[:40]
             ad_preview = (c.get("address") or "")[:30]
             print(f"  {i:3d}. {nm}{ad_mark} | {ad_preview}")
-        if total_cards > 20:
-            print(f"  ... ({total_cards - 20} more)")
 
         # 베라/vera/veragym 부분 포함 후보 전체 나열
         veragym_candidates = [
