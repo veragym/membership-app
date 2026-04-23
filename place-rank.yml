@@ -1,0 +1,47 @@
+name: Place Rank Crawler
+
+on:
+  schedule:
+    # 매 2시간 7분 (정각 회피) — 파이썬 내부에서 추가 0~59분 랜덤 지연
+    - cron: '7 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      keyword_id:
+        description: 'Keyword UUID (or "all" for all active keywords)'
+        required: false
+        default: 'all'
+        type: string
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: place-rank-crawler
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'crawler/requirements.txt'
+
+      - name: Install dependencies
+        working-directory: crawler
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Run crawler
+        working-directory: crawler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python place_rank.py ${{ github.event.inputs.keyword_id || 'all' }}
