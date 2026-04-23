@@ -100,25 +100,27 @@ const PromoTab = (() => {
             </div>
             <div class="ops-panel-body" id="resvListBody"></div>
           </div>
-          <div class="ops-panel">
-            <div class="ops-panel-header">
-              <span class="ops-panel-title">금일 업무</span>
-              <span style="font-size:11px;color:var(--color-text-muted)">업무계획 탭에서 등록된 업무 · 체크하면 즉시 저장</span>
-            </div>
-            <div class="ops-panel-body" id="opsTodayTasks">
-              <div class="ops-placeholder">불러오는 중…</div>
-            </div>
-          </div>
-          <div class="ops-panel">
-            <div class="ops-panel-header">
-              <span class="ops-panel-title">시간 일정 (오늘 이후)</span>
-              <div class="ops-upcoming-actions">
-                <button type="button" class="btn-upcoming-action" id="btnUpcomingDelSelected" disabled>선택삭제</button>
-                <button type="button" class="btn-upcoming-action btn-upcoming-danger" id="btnUpcomingDelAll">전체삭제</button>
+          <div class="ops-bottom-row">
+            <div class="ops-panel">
+              <div class="ops-panel-header">
+                <span class="ops-panel-title">금일 업무</span>
+                <span style="font-size:11px;color:var(--color-text-muted)">업무계획 탭에서 등록된 업무 · 체크하면 즉시 저장</span>
+              </div>
+              <div class="ops-panel-body" id="opsTodayTasks">
+                <div class="ops-placeholder">불러오는 중…</div>
               </div>
             </div>
-            <div class="ops-panel-body" id="opsUpcomingList">
-              <div class="ops-placeholder">불러오는 중…</div>
+            <div class="ops-panel">
+              <div class="ops-panel-header">
+                <span class="ops-panel-title">시간 일정 (오늘 이후)</span>
+                <div class="ops-upcoming-actions">
+                  <button type="button" class="btn-upcoming-action" id="btnUpcomingDelSelected" disabled>선택삭제</button>
+                  <button type="button" class="btn-upcoming-action btn-upcoming-danger" id="btnUpcomingDelAll">전체삭제</button>
+                </div>
+              </div>
+              <div class="ops-panel-body" id="opsUpcomingList">
+                <div class="ops-placeholder">불러오는 중…</div>
+              </div>
             </div>
           </div>
         </div>
