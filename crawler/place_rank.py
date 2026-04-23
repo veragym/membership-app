@@ -187,21 +187,20 @@ async def click_next_page(page) -> tuple[bool, str | None]:
     clicked_sel = await page.evaluate(
         """
         () => {
-          // 네이버 모바일 통합검색 플레이스 위젯 pagination — 검증된 셀렉터만
+          // Naver PC (search.naver.com) 플레이스 위젯 pagination
+          // 2026 기준 검증된 셀렉터 (DOM 디버그로 확인됨):
+          //   1) aria-label="다음 페이지로 가기" — 플레이스 섹션 하단 페이지 번호
+          //   2) button.next_button — flicking carousel의 다음 버튼
+          //   3) a.cmm_pg_next — 통합 공통 pagination (place 아닐 수 있음)
           const selectors = [
-            // 플레이스 위젯 flicking UI
-            '.api_flicking_wrap a.flick_next:not(.disabled)',
+            // [PRIMARY] sds-comps-button + aria-label='다음 페이지로 가기'
+            'button[aria-label="다음 페이지로 가기"]:not([disabled])',
+            // [SECONDARY] flicking carousel next — disabled 클래스가 붙어있으면 제외
+            'button.next_button:not(.flicking-arrow-disabled):not(:disabled)',
+            // [TERTIARY] 통합 common pagination
+            'a.cmm_pg_next:not(.disabled)',
+            // [FALLBACK] 플레이스 섹션 scoped 옛 셀렉터
             '.api_flicking_wrap button.flick_next:not(:disabled)',
-            // 플레이스 섹션 하단 페이지네이션
-            '.sc_new.sp_nx_map a.pg_next:not(.on)',
-            '.place_section a.pg_next:not(.on)',
-            // 지도(map) 섹션 공통
-            '.map_place_section a.btn_arr_next:not([aria-disabled="true"])',
-            // Naver 신 플레이스 위젯 (2024~)
-            'a.n79VT:not([aria-disabled="true"])',
-            // aria 기반 — 단, 반드시 플레이스/지도 섹션 내부
-            '.place_section a[aria-label*="다음"]',
-            '.sc_new a[aria-label*="다음"]',
           ];
           for (const sel of selectors) {
             const els = document.querySelectorAll(sel);
