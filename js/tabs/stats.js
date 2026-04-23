@@ -17,22 +17,14 @@ const StatsTab = (() => {
   let allProducts = [];
   let excludedProducts = new Set();
 
-  // 우측 패널 탭
-  let rightTab = 'avg'; // 'avg' | 'staff'
-
-  // 평균매출 패널 상태 (트레이너 앱 방식)
-  let avgPeriodType = 'year';
-  let avgPeriodYear = new Date().getFullYear();
-  let avgPeriodSub  = 1;
-  let _fcByMonth = null; // 캐시
-  let _ptByMonth = null;
+  // 우측 패널 (매출담당/계약T 월별 통계)
+  let staffType = 'fc'; // 'fc' | 'pt'
+  let staffSimpleMonth = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  })();
 
   // 담당자별 통계 패널 상태
-  let staffType = 'fc';
-  let staffFilter = 'sales';
-  let staffPeriodType = 'month';
-  let staffPeriodYear = new Date().getFullYear();
-  let staffPeriodSub  = new Date().getMonth() + 1;
 
   function init() {
     const saved = localStorage.getItem(EXCLUDE_STORAGE_KEY);
@@ -119,28 +111,18 @@ const StatsTab = (() => {
           ${renderCard(`전월 대비 (${lastMonth.m}월)`, lastM, null, null, { compareBase: current })}
           ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
         </div>
-        <div class="stats-avg-stack">
-          <div class="stats-avg-controls">
-            <select id="avgYear" class="stats-staff-select">
-              ${[2023,2024,2025,2026,2027].map(yr=>`<option value="${yr}"${avgPeriodYear===yr?' selected':''}>${yr}년</option>`).join('')}
-            </select>
-            <select id="avgType" class="stats-staff-select">
-              <option value="year"    ${avgPeriodType==='year'   ?'selected':''}>연간</option>
-              <option value="half"    ${avgPeriodType==='half'   ?'selected':''}>반기</option>
-              <option value="quarter" ${avgPeriodType==='quarter'?'selected':''}>분기</option>
-            </select>
-            <select id="avgSub" class="stats-staff-select" ${avgPeriodType==='year'?'style="display:none"':''}>
-              ${buildAvgSubOptions()}
-            </select>
+        <div class="stats-card-v2 stats-staff-panel">
+          <div class="stats-staff-header">
+            <div class="stats-staff-tabs">
+              <button class="stats-staff-tab ${staffType==='fc'?'active':''}" data-type="fc">회원권</button>
+              <button class="stats-staff-tab ${staffType==='pt'?'active':''}" data-type="pt">PT</button>
+            </div>
+            <input type="month" id="staffMonthPick" value="${staffSimpleMonth}" class="stats-staff-select">
           </div>
-          <div class="stats-card-v2 stats-avg-card" id="avgCardFc">
-            <div class="stats-avg-card-title"><span class="stats-mini-type fc">회원권</span> 평균 매출</div>
-            <div id="avgFcBody" class="stats-avg-card-body"><div class="loading-center"><div class="spinner"></div></div></div>
+          <div class="stats-staff-sub-label" id="staffSubLabel">
+            ${staffType==='fc'?'매출담당자별':'계약T별'}
           </div>
-          <div class="stats-card-v2 stats-avg-card" id="avgCardPt">
-            <div class="stats-avg-card-title"><span class="stats-mini-type pt">PT</span> 평균 매출</div>
-            <div id="avgPtBody" class="stats-avg-card-body"><div class="loading-center"><div class="spinner"></div></div></div>
-          </div>
+          <div id="staffBody" class="stats-staff-body"></div>
         </div>
       </div>
     `;
@@ -163,268 +145,34 @@ const StatsTab = (() => {
         .catch(() => Toast.error('복사 실패'));
     });
 
-    // 평균매출 패널 (FC/PT 각각)
-    loadAvgCards(container);
-  }
-
-  // ───────── 평균매출 패널 HTML ─────────
-  function buildAvgSubOptions() {
-    if (avgPeriodType === 'half')
-      return [1,2].map(h=>`<option value="${h}"${avgPeriodSub===h?' selected':''}>${h===1?'상반기':'하반기'}</option>`).join('');
-    if (avgPeriodType === 'quarter')
-      return [1,2,3,4].map(q=>`<option value="${q}"${avgPeriodSub===q?' selected':''}>${q}분기</option>`).join('');
-    return '';
-  }
-
-  async function loadAvgCards(container) {
-    // 전체 데이터 캐시
-    if (!_fcByMonth || !_ptByMonth) {
-      const [fcRes, ptRes] = await Promise.all([
-        supabase.from('registrations').select('registered_date, total_payment, product'),
-        supabase.from('pt_registrations').select('contract_date, contract_amount')
-      ]);
-      _fcByMonth = {};
-      ((fcRes.data||[]).filter(r=>!excludedProducts.has(r.product))).forEach(r => {
-        const mo = (r.registered_date||'').slice(0,7);
-        if (mo) _fcByMonth[mo] = (_fcByMonth[mo]||0) + Math.round((r.total_payment||0)/1.1);
-      });
-      _ptByMonth = {};
-      (ptRes.data||[]).forEach(r => {
-        const mo = (r.contract_date||'').slice(0,7);
-        if (mo) _ptByMonth[mo] = (_ptByMonth[mo]||0) + (r.contract_amount||0);
-      });
-    }
-
-    // 컨트롤 이벤트
-    const avgYearSel = container.querySelector('#avgYear');
-    const avgTypeSel = container.querySelector('#avgType');
-    const avgSubSel  = container.querySelector('#avgSub');
-    if (avgYearSel) {
-      avgYearSel.addEventListener('change', e => { avgPeriodYear=+e.target.value; renderAvgCards(container); });
-      avgTypeSel.addEventListener('change', e => {
-        avgPeriodType = e.target.value;
-        if (avgPeriodType==='year') { avgSubSel.style.display='none'; }
-        else {
-          if (avgPeriodType==='half') avgPeriodSub = new Date().getMonth()<6?1:2;
-          else avgPeriodSub = Math.ceil((new Date().getMonth()+1)/3);
-          avgSubSel.innerHTML = buildAvgSubOptions();
-          avgSubSel.value = avgPeriodSub;
-          avgSubSel.style.display = '';
-        }
-        renderAvgCards(container);
-      });
-      avgSubSel.addEventListener('change', e => { avgPeriodSub=+e.target.value; renderAvgCards(container); });
-    }
-    renderAvgCards(container);
-  }
-
-  function renderAvgCards(container) {
-    const fmt = n => n.toLocaleString() + '원';
-    const { elMonths, label } = calcAvgPeriod();
-    const [fcTotal, ptTotal] = getPeriodTotals();
-
-    // 전체 월평균
-    const fcMonthVals = Object.values(_fcByMonth||{});
-    const ptMonthVals = Object.values(_ptByMonth||{});
-    const fcAvgAll = fcMonthVals.length ? Math.round(fcMonthVals.reduce((a,b)=>a+b,0)/fcMonthVals.length) : 0;
-    const ptAvgAll = ptMonthVals.length ? Math.round(ptMonthVals.reduce((a,b)=>a+b,0)/ptMonthVals.length) : 0;
-
-    const periodLine = elMonths > 0
-      ? `<div class="avg-period-label">${label} <span class="avg-elapsed">(÷${elMonths}개월)</span></div>`
-      : `<div class="avg-period-label" style="color:var(--color-text-muted)">미래 기간</div>`;
-
-    const fcAvg = elMonths > 0 ? Math.round(fcTotal/elMonths) : 0;
-    const ptAvg = elMonths > 0 ? Math.round(ptTotal/elMonths) : 0;
-
-    const fcBody = container.querySelector('#avgFcBody');
-    const ptBody = container.querySelector('#avgPtBody');
-
-    if (fcBody) fcBody.innerHTML = `
-      ${periodLine}
-      <div class="avg-stat-row"><span>전체 월평균</span><b class="avg-all">${fmt(fcAvgAll)}</b></div>
-      <div class="avg-stat-row"><span>${label} 합계</span><b>${fmt(fcTotal)}</b></div>
-      <div class="avg-stat-row avg-accent"><span>${label} 월평균</span><b>${fmt(fcAvg)}</b></div>
-    `;
-
-    if (ptBody) ptBody.innerHTML = `
-      ${periodLine}
-      <div class="avg-stat-row"><span>전체 월평균</span><b class="avg-all">${fmt(ptAvgAll)}</b></div>
-      <div class="avg-stat-row"><span>${label} 합계</span><b>${fmt(ptTotal)}</b></div>
-      <div class="avg-stat-row avg-accent"><span>${label} 월평균</span><b>${fmt(ptAvg)}</b></div>
-    `;
-  }
-
-  function getPeriodTotals() {
-    let startM, endM;
-    if (avgPeriodType === 'year') { startM=1; endM=12; }
-    else if (avgPeriodType === 'half') { startM=avgPeriodSub===1?1:7; endM=avgPeriodSub===1?6:12; }
-    else { startM=(avgPeriodSub-1)*3+1; endM=avgPeriodSub*3; }
-    let fc=0, pt=0;
-    for (let mo=startM; mo<=endM; mo++) {
-      const key = `${avgPeriodYear}-${String(mo).padStart(2,'0')}`;
-      fc += _fcByMonth?.[key]||0;
-      pt += _ptByMonth?.[key]||0;
-    }
-    return [fc, pt];
-  }
-
-  function calcAvgPeriod() {
-    const today = new Date();
-    const curY = today.getFullYear(), curM = today.getMonth()+1;
-    let startM, endM;
-    if (avgPeriodType === 'year') { startM=1; endM=12; }
-    else if (avgPeriodType === 'half') { startM=avgPeriodSub===1?1:7; endM=avgPeriodSub===1?6:12; }
-    else { startM=(avgPeriodSub-1)*3+1; endM=avgPeriodSub*3; }
-
-    let elMonths;
-    if (avgPeriodYear < curY) elMonths = endM-startM+1;
-    else if (avgPeriodYear > curY) elMonths = 0;
-    else elMonths = Math.max(0, Math.min(endM,curM)-startM+1);
-
-    const [fc, pt] = getPeriodTotals();
-    const fcAvg = elMonths>0 ? Math.round(fc/elMonths) : 0;
-    const ptAvg = elMonths>0 ? Math.round(pt/elMonths) : 0;
-
-    const labelMap = {
-      year: `${avgPeriodYear}년`,
-      half: `${avgPeriodYear}년 ${avgPeriodSub===1?'상':'하'}반기`,
-      quarter: `${avgPeriodYear}년 ${avgPeriodSub}분기`,
-    };
-    return { fcAvg, ptAvg, elMonths, label: labelMap[avgPeriodType] };
-  }
-
-  // ───────── 담당자별 패널 HTML ─────────
-  function renderStaffPanelHTML() {
-    return `
-      <div class="stats-staff-header">
-        <div class="stats-staff-tabs">
-          <button class="stats-staff-tab ${staffType==='fc'?'active':''}" data-type="fc">회원권</button>
-          <button class="stats-staff-tab ${staffType==='pt'?'active':''}" data-type="pt">PT</button>
-        </div>
-        <div class="stats-staff-controls">
-          <select id="staffPeriodType" class="stats-staff-select">
-            <option value="month"   ${staffPeriodType==='month'  ?'selected':''}>월별</option>
-            <option value="quarter" ${staffPeriodType==='quarter'?'selected':''}>분기</option>
-            <option value="half"    ${staffPeriodType==='half'   ?'selected':''}>반기</option>
-            <option value="year"    ${staffPeriodType==='year'   ?'selected':''}>연간</option>
-            <option value="all"     ${staffPeriodType==='all'    ?'selected':''}>전체기간</option>
-          </select>
-          <select id="staffPeriodYear" class="stats-staff-select" ${staffPeriodType==='all'?'style="display:none"':''}>
-            ${[2023,2024,2025,2026,2027].map(yr=>`<option value="${yr}"${staffPeriodYear===yr?' selected':''}>${yr}년</option>`).join('')}
-          </select>
-          <select id="staffPeriodSub" class="stats-staff-select" ${['year','all'].includes(staffPeriodType)?'style="display:none"':''}>
-            ${buildSubOptions()}
-          </select>
-          <select id="staffFilter" class="stats-staff-select" ${staffType==='fc'?'style="display:none"':''}>
-            <option value="sales"    ${staffFilter==='sales'   ?'selected':''}>매출담당</option>
-            <option value="contract" ${staffFilter==='contract'?'selected':''}>계약T</option>
-          </select>
-        </div>
-      </div>
-      <div id="staffBody" class="stats-staff-body"></div>
-    `;
-  }
-
-  function bindStaffPanelEvents(container, body) {
-    body.querySelectorAll('.stats-staff-tab').forEach(btn => {
+    // 우측 스태프 패널
+    container.querySelectorAll('.stats-staff-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         staffType = btn.dataset.type;
-        body.querySelectorAll('.stats-staff-tab').forEach(b => b.classList.toggle('active', b === btn));
-        body.querySelector('#staffFilter').style.display = staffType==='fc'?'none':'';
-        loadStaffData(body);
+        container.querySelectorAll('.stats-staff-tab').forEach(b => b.classList.toggle('active', b === btn));
+        const lbl = container.querySelector('#staffSubLabel');
+        if (lbl) lbl.textContent = staffType==='fc' ? '매출담당자별' : '계약T별';
+        loadSimpleStaffData(container);
       });
     });
-    body.querySelector('#staffPeriodType').addEventListener('change', e => {
-      staffPeriodType = e.target.value;
-      const yearSel = body.querySelector('#staffPeriodYear');
-      const subSel  = body.querySelector('#staffPeriodSub');
-      yearSel.style.display = staffPeriodType==='all'?'none':'';
-      if (['year','all'].includes(staffPeriodType)) {
-        subSel.style.display = 'none';
-      } else {
-        if (staffPeriodType==='quarter') staffPeriodSub = Math.ceil((new Date().getMonth()+1)/3);
-        else if (staffPeriodType==='half') staffPeriodSub = new Date().getMonth()<6?1:2;
-        else staffPeriodSub = new Date().getMonth()+1;
-        subSel.innerHTML = buildSubOptions();
-        subSel.value = staffPeriodSub;
-        subSel.style.display = '';
-      }
-      loadStaffData(body);
+    container.querySelector('#staffMonthPick').addEventListener('change', e => {
+      staffSimpleMonth = e.target.value;
+      loadSimpleStaffData(container);
     });
-    body.querySelector('#staffPeriodYear').addEventListener('change', e => {
-      staffPeriodYear = +e.target.value;
-      const subSel = body.querySelector('#staffPeriodSub');
-      if (!['year','all'].includes(staffPeriodType)) { subSel.innerHTML=buildSubOptions(); subSel.value=staffPeriodSub; }
-      loadStaffData(body);
-    });
-    body.querySelector('#staffPeriodSub').addEventListener('change', e => { staffPeriodSub=+e.target.value; loadStaffData(body); });
-    body.querySelector('#staffFilter').addEventListener('change', e => { staffFilter=e.target.value; loadStaffData(body); });
+    loadSimpleStaffData(container);
   }
 
-  function buildSubOptions() {
-    if (staffPeriodType === 'month')
-      return Array.from({length:12},(_,i)=>i+1)
-        .map(mo=>`<option value="${mo}"${staffPeriodSub===mo?' selected':''}>${mo}월</option>`).join('');
-    if (staffPeriodType === 'quarter')
-      return [1,2,3,4].map(q=>`<option value="${q}"${staffPeriodSub===q?' selected':''}>${q}분기</option>`).join('');
-    if (staffPeriodType === 'half')
-      return [1,2].map(h=>`<option value="${h}"${staffPeriodSub===h?' selected':''}>${h===1?'상반기':'하반기'}</option>`).join('');
-    return '';
-  }
-
-  function computeStaffPeriod() {
-    const today = new Date();
-    const todayISO = isoDate(today);
-    let fromDate, toDate;
-
-    if (staffPeriodType === 'month') {
-      fromDate = `${staffPeriodYear}-${String(staffPeriodSub).padStart(2,'0')}-01`;
-      toDate   = isoDate(new Date(staffPeriodYear, staffPeriodSub, 0));
-    } else if (staffPeriodType === 'quarter') {
-      const qs = (staffPeriodSub-1)*3+1, qe = staffPeriodSub*3;
-      fromDate = `${staffPeriodYear}-${String(qs).padStart(2,'0')}-01`;
-      toDate   = isoDate(new Date(staffPeriodYear, qe, 0));
-    } else if (staffPeriodType === 'half') {
-      const hs = staffPeriodSub===1?1:7, he = staffPeriodSub===1?6:12;
-      fromDate = `${staffPeriodYear}-${String(hs).padStart(2,'0')}-01`;
-      toDate   = isoDate(new Date(staffPeriodYear, he, 0));
-    } else if (staffPeriodType === 'year') {
-      fromDate = `${staffPeriodYear}-01-01`;
-      toDate   = `${staffPeriodYear}-12-31`;
-    } else { // all
-      fromDate = '2023-01-01';
-      toDate   = todayISO;
-    }
-
-    // toDate는 오늘을 초과할 수 없음
-    if (toDate > todayISO) toDate = todayISO;
-
-    // 실제 경과 개월 수 계산 (지나간 기간만)
-    const fromDt = new Date(fromDate);
-    const elapsedMonths = staffPeriodType === 'month' ? 1 : Math.max(1,
-      (today.getFullYear() - fromDt.getFullYear()) * 12
-      + today.getMonth() - fromDt.getMonth() + 1
-    );
-
-    return { fromDate, toDate, elapsedMonths, showAvg: staffPeriodType !== 'month' };
-  }
-
-  async function loadStaffData(container) {
+  async function loadSimpleStaffData(container) {
     const body = container.querySelector('#staffBody');
     if (!body) return;
     body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
-
-    const { fromDate, toDate, elapsedMonths, showAvg } = computeStaffPeriod();
+    const [sy, sm] = staffSimpleMonth.split('-');
+    const fromDate = `${sy}-${sm}-01`;
+    const toDate   = isoDate(new Date(+sy, +sm, 0));
     const fmt = n => n.toLocaleString() + '원';
 
     const renderTable = (headLabel, amtLabel, sorted, totalCount, total) => {
       if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
-      const avgRow = showAvg ? `
-        <tr class="stats-staff-avg">
-          <td>월평균 <small>(÷${elapsedMonths}개월)</small></td>
-          <td>-</td>
-          <td class="stats-staff-amount">${fmt(Math.round(total/elapsedMonths))}</td>
-        </tr>` : '';
       body.innerHTML = `
         <table class="stats-staff-table">
           <thead><tr><th>${headLabel}</th><th>건수</th><th>${amtLabel}</th></tr></thead>
@@ -434,10 +182,7 @@ const StatsTab = (() => {
               <td class="stats-staff-count">${v.count}건</td>
               <td class="stats-staff-amount">${fmt(v.amount)}</td>
             </tr>`).join('')}</tbody>
-          <tfoot>
-            <tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr>
-            ${avgRow}
-          </tfoot>
+          <tfoot><tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr></tfoot>
         </table>`;
     };
 
@@ -445,57 +190,33 @@ const StatsTab = (() => {
       const { data } = await supabase.from('registrations')
         .select('sales_manager, total_payment, product')
         .gte('registered_date', fromDate).lte('registered_date', toDate);
-      const rows = (data || []).filter(r => !excludedProducts.has(r.product));
+      const rows = (data||[]).filter(r => !excludedProducts.has(r.product));
       const grouped = {};
       rows.forEach(r => {
         const name = r.sales_manager || '(미지정)';
         if (!grouped[name]) grouped[name] = { amount: 0, count: 0 };
-        grouped[name].amount += Math.round((r.total_payment || 0) / 1.1);
+        grouped[name].amount += Math.round((r.total_payment||0)/1.1);
         grouped[name].count++;
       });
-      const sorted = Object.entries(grouped).sort((a,b) => b[1].amount - a[1].amount);
-      const total = sorted.reduce((s,[,v]) => s+v.amount, 0);
+      const sorted = Object.entries(grouped).sort((a,b)=>b[1].amount-a[1].amount);
+      const total  = sorted.reduce((s,[,v])=>s+v.amount, 0);
       renderTable('매출담당', '매출액', sorted, rows.length, total);
     } else {
-      const trainerKey = staffFilter === 'contract' ? 'contract_trainer' : 'assigned_trainer';
-      const fkName = staffFilter === 'contract'
-        ? 'contract_trainer:trainers!pt_registrations_contract_trainer_id_fkey(name)'
-        : 'assigned_trainer:trainers!pt_registrations_assigned_trainer_id_fkey(name)';
       const { data } = await supabase.from('pt_registrations')
-        .select(`contract_amount, ${fkName}`)
+        .select('contract_amount, contract_trainer:trainers!pt_registrations_contract_trainer_id_fkey(name)')
         .gte('contract_date', fromDate).lte('contract_date', toDate);
       const grouped = {};
-      (data || []).forEach(r => {
-        const name = r[trainerKey]?.name || '(미지정)';
+      (data||[]).forEach(r => {
+        const name = r.contract_trainer?.name || '(미지정)';
         if (!grouped[name]) grouped[name] = { amount: 0, count: 0 };
-        grouped[name].amount += (r.contract_amount || 0);
+        grouped[name].amount += (r.contract_amount||0);
         grouped[name].count++;
       });
-      const sorted = Object.entries(grouped).sort((a,b) => b[1].amount - a[1].amount);
-      const total = sorted.reduce((s,[,v]) => s+v.amount, 0);
-      const totalCount = sorted.reduce((s,[,v]) => s+v.count, 0);
-      const header = staffFilter === 'contract' ? '계약T' : '매출담당';
-      renderTable(header, '계약금액', sorted, totalCount, total);
+      const sorted = Object.entries(grouped).sort((a,b)=>b[1].amount-a[1].amount);
+      const total      = sorted.reduce((s,[,v])=>s+v.amount, 0);
+      const totalCount = sorted.reduce((s,[,v])=>s+v.count, 0);
+      renderTable('계약T', '계약금액', sorted, totalCount, total);
     }
-  }
-
-  function renderMiniCard(label, period, pastAmt, curAmt, isFC) {
-    const fmt = n => n.toLocaleString() + '원';
-    const diff = curAmt - pastAmt;
-    const pct  = pastAmt > 0 ? Math.round((curAmt/pastAmt - 1)*100) : 0;
-    const sign  = diff >= 0 ? '+' : '';
-    const cls   = diff >= 0 ? 'pos' : 'neg';
-    const typeLabel = isFC ? '회원권' : 'PT';
-    return `
-      <div class="stats-mini-card">
-        <div class="stats-mini-header">
-          <span class="stats-mini-type ${isFC?'fc':'pt'}">${typeLabel}</span>
-          <span class="stats-mini-period">${period}</span>
-        </div>
-        <div class="stats-mini-amount">${fmt(pastAmt)}</div>
-        <div class="stats-delta ${cls}">${sign}${fmt(diff)} (${sign}${pct}%)</div>
-      </div>
-    `;
   }
 
   function renderCard(title, rev, fcTarget, ptTarget, opts = {}) {
