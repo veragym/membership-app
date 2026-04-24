@@ -289,8 +289,7 @@ const SettingsTab = (() => {
     return `
       <div class="settings-option-item ${inactive ? 'inactive' : ''}" data-id="${opt.id}">
         <div class="opt-order">${opt.sort_order}</div>
-        ${swatch}
-        <div class="opt-value">${escapeHtml(opt.value)}${usageBadge}</div>
+        <div class="opt-value">${swatch}${escapeHtml(opt.value)}${usageBadge}</div>
         <div class="opt-actions">
           ${!inactive ? `
             <button type="button" class="btn-icon btn-move-up"   ${canMoveUp ? '' : 'disabled'} title="위로">↑</button>
