@@ -1943,6 +1943,36 @@ html, body {
   font-size: 14px;
   color: var(--color-text-primary);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 인기순 카테고리: 사용 건수 배지 */
+.opt-usage-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.settings-option-item.inactive .opt-usage-badge {
+  background: var(--color-bg-2);
+  color: var(--color-text-muted);
+}
+
+/* 섹션 헤더 하단 힌트 (인기순 안내 등) */
+.settings-section-hint {
+  padding: 4px 20px 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .opt-actions {

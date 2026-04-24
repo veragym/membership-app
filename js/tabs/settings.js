@@ -28,6 +28,13 @@ const SettingsTab = (() => {
   let activeCategory = '구분';
   let currentOptions = [];  // 현재 카테고리의 옵션 리스트
 
+  // 인기순 자동정렬 카테고리 → 실제 사용 레코드 소스 매핑
+  // 카테고리 선택 시 사용 횟수를 집계 → 인기순으로 sort_order 일괄 갱신
+  const POPULARITY_SOURCES = {
+    '회원권상품': { table: 'registrations',    column: 'product' },
+    'PT상품':    { table: 'pt_registrations', column: 'product' },
+  };
+
   async function init() {
     // admin 아니면 접근 차단 (이중 안전장치 — tab-btn이 display:none이지만 직접 호출 가능성)
     if (!Auth.isPureAdmin()) {
@@ -102,7 +109,102 @@ const SettingsTab = (() => {
     }
 
     currentOptions = data || [];
+
+    // 인기순 자동정렬 대상 카테고리라면 usage_count 주입 + sort_order 재배치
+    if (POPULARITY_SOURCES[category]) {
+      await applyPopularitySort(category);
+    }
+
     renderOptionList();
+  }
+
+  /**
+   * 지정 카테고리 옵션을 실제 사용 횟수로 집계하여
+   *  - 각 옵션에 usage_count 필드 주입
+   *  - 활성 옵션의 sort_order 를 인기순(내림차순)으로 재배치
+   *  동률일 경우 기존 sort_order 유지. 집계 실패 시 조용히 fallback (기존 정렬 유지).
+   */
+  async function applyPopularitySort(category) {
+    const src = POPULARITY_SOURCES[category];
+    if (!src) return;
+
+    const { data: usage, error } = await supabase
+      .from(src.table)
+      .select(src.column)
+      .not(src.column, 'is', null);
+
+    if (error) {
+      console.warn('[settings] 인기순 집계 실패:', error.message);
+      return;  // fallback: 기존 sort_order 그대로
+    }
+
+    // value → count 집계
+    const counts = new Map();
+    (usage || []).forEach(r => {
+      const v = r[src.column];
+      if (!v) return;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    });
+
+    // 각 옵션에 usage_count 주입
+    currentOptions.forEach(o => {
+      o.usage_count = counts.get(o.value) || 0;
+    });
+
+    // 활성 옵션만 인기순 재배치
+    const activeOpts = currentOptions.filter(o => o.is_active);
+    activeOpts.sort((a, b) => {
+      if (b.usage_count !== a.usage_count) return b.usage_count - a.usage_count;
+      return (a.sort_order || 0) - (b.sort_order || 0);  // 동률 tie-break
+    });
+
+    // DB 갱신이 필요한 옵션만 집계 (현재 sort_order ≠ 새 rank)
+    const updates = [];
+    activeOpts.forEach((opt, idx) => {
+      const newOrder = idx + 1;
+      if (opt.sort_order !== newOrder) {
+        updates.push({ id: opt.id, newOrder });
+      }
+    });
+
+    if (updates.length === 0) {
+      // 이미 인기순 → 그래도 화면 정렬은 반영되도록 currentOptions 재정렬
+      reorderCurrentOptions(activeOpts);
+      return;
+    }
+
+    // 2-step update: UNIQUE(category, sort_order) 충돌 방지 위해 일단 음수로 이동
+    // (dropdown_options 테이블에 해당 UNIQUE 제약이 걸려있지 않더라도 안전하게)
+    try {
+      // Step 1: 모두 임시 음수로
+      for (let i = 0; i < updates.length; i++) {
+        const u = updates[i];
+        const { error: e } = await supabase.from('dropdown_options')
+          .update({ sort_order: -(i + 1) }).eq('id', u.id);
+        if (e) throw e;
+      }
+      // Step 2: 목표 순서로
+      for (const u of updates) {
+        const { error: e } = await supabase.from('dropdown_options')
+          .update({ sort_order: u.newOrder }).eq('id', u.id);
+        if (e) throw e;
+      }
+
+      // 로컬 상태 갱신
+      activeOpts.forEach((opt, idx) => { opt.sort_order = idx + 1; });
+      reorderCurrentOptions(activeOpts);
+      Dropdown.clearCache(category);
+    } catch (e) {
+      console.warn('[settings] 인기순 sort_order 갱신 실패:', e.message);
+      // 실패해도 화면은 인기순으로 보여줌
+      reorderCurrentOptions(activeOpts);
+    }
+  }
+
+  // currentOptions를 [활성(인기순) → 비활성] 으로 재배치
+  function reorderCurrentOptions(sortedActiveOpts) {
+    const inactiveOpts = currentOptions.filter(o => !o.is_active);
+    currentOptions = [...sortedActiveOpts, ...inactiveOpts];
   }
 
   function renderOptionList() {
@@ -117,10 +219,16 @@ const SettingsTab = (() => {
 
     let html = '';
 
+    const isPopularitySort = !!POPULARITY_SOURCES[activeCategory];
+    const popularityHint = isPopularitySort
+      ? '<div class="settings-section-hint">실제 등록 건수 기준 인기순 자동 정렬 (매번 로드 시 갱신)</div>'
+      : '';
+
     if (activeOpts.length > 0) {
       html += `
         <div class="settings-option-section">
           <div class="settings-section-title">활성 (${activeOpts.length})</div>
+          ${popularityHint}
           <div class="settings-option-items">
             ${activeOpts.map((o, idx) => renderItem(o, idx, activeOpts.length)).join('')}
           </div>
@@ -148,10 +256,16 @@ const SettingsTab = (() => {
     const canMoveDown  = index !== null && index < total - 1;
     const inactive     = !opt.is_active;
 
+    // 인기순 카테고리면 사용 횟수 배지 표시
+    const showUsage = POPULARITY_SOURCES[activeCategory] && typeof opt.usage_count === 'number';
+    const usageBadge = showUsage
+      ? `<span class="opt-usage-badge" title="실제 등록 건수">${opt.usage_count}건</span>`
+      : '';
+
     return `
       <div class="settings-option-item ${inactive ? 'inactive' : ''}" data-id="${opt.id}">
         <div class="opt-order">${opt.sort_order}</div>
-        <div class="opt-value">${escapeHtml(opt.value)}</div>
+        <div class="opt-value">${escapeHtml(opt.value)}${usageBadge}</div>
         <div class="opt-actions">
           ${!inactive ? `
             <button type="button" class="btn-icon btn-move-up"   ${canMoveUp ? '' : 'disabled'} title="위로">↑</button>
