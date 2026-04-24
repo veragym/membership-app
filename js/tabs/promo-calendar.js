@@ -506,6 +506,15 @@ const PromoCalendarTab = (() => {
             <textarea name="description" rows="2" placeholder="선택">${esc(descVal)}</textarea>
           </div>
 
+          ${isEdit ? '' : `
+          <div class="plan-form-row">
+            <label>고정업무에서 불러오기 <span style="color:var(--color-text-muted);font-weight:400">(선택)</span></label>
+            <select id="planTplPick">
+              <option value="">— 선택 —</option>
+            </select>
+          </div>
+          `}
+
           <div class="plan-items-editor">
             <div class="plan-items-hdr">
               <span>체크리스트 (드래그로 순서 변경)</span>
@@ -543,8 +552,80 @@ const PromoCalendarTab = (() => {
           e.preventDefault();
           await handleTaskSubmit(e.target, isEdit ? task.id : null, workingItems, items);
         });
+
+        // 고정업무 템플릿 드롭다운 (신규 등록일 때만)
+        const tplSel = el.querySelector('#planTplPick');
+        if (tplSel) {
+          loadTemplatesForPicker(tplSel);
+          tplSel.addEventListener('change', async () => {
+            const tplId = tplSel.value;
+            if (!tplId) return;
+            await applyTemplateToForm(el, tplId, workingItems, listEl);
+            tplSel.value = '';  // 적용 후 드롭다운 초기화
+          });
+        }
       }
     });
+  }
+
+  // 고정업무 템플릿 드롭다운 옵션 로드
+  async function loadTemplatesForPicker(selectEl) {
+    const { data, error } = await supabase
+      .from('task_templates')
+      .select('id, title, category, day_of_month_start, duration_days, is_active')
+      .eq('is_active', true)
+      .order('category').order('title');
+    if (error) {
+      console.error('template picker load failed:', error);
+      return;
+    }
+    const opts = (data || []).map(t => {
+      const label = `[${t.category || '기타'}] ${t.title} · 매월 ${t.day_of_month_start}일 · ${t.duration_days}일간`;
+      return `<option value="${t.id}">${esc(label)}</option>`;
+    }).join('');
+    selectEl.innerHTML = `<option value="">— 선택 —</option>` + opts;
+  }
+
+  // 선택된 템플릿을 현재 폼에 적용 (신규 등록 시)
+  async function applyTemplateToForm(formEl, tplId, workingItems, listEl) {
+    const { data: tpl, error: e1 } = await supabase
+      .from('task_templates')
+      .select('id, title, category, day_of_month_start, duration_days, task_template_items(id, content, order_index)')
+      .eq('id', tplId).single();
+    if (e1 || !tpl) {
+      Toast.error('템플릿 로드 실패' + (e1 ? ': ' + e1.message : ''));
+      return;
+    }
+    const tplItems = (tpl.task_template_items || []).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+    // 제목 — 비어있을 때만 채움
+    const titleInput = formEl.querySelector('input[name="title"]');
+    if (titleInput && !titleInput.value.trim()) titleInput.value = tpl.title || '';
+
+    // 카테고리 — 현재 기본값(기타)일 때만 치환
+    const catSel = formEl.querySelector('select[name="category"]');
+    if (catSel && catSel.value === '기타' && tpl.category) catSel.value = tpl.category;
+
+    // 종료일 — 시작일 + duration - 1 로 설정
+    const startInp = formEl.querySelector('input[name="start_date"]');
+    const endInp   = formEl.querySelector('input[name="end_date"]');
+    if (startInp && endInp && tpl.duration_days) {
+      const s = parseYMD(startInp.value);
+      if (!isNaN(s)) {
+        const e = addDays(s, Math.max(0, (tpl.duration_days || 1) - 1));
+        endInp.value = toYMD(e);
+      }
+    }
+
+    // 체크리스트 — 빈 항목은 제거 후 템플릿 항목 추가
+    for (let i = workingItems.length - 1; i >= 0; i--) {
+      if (!String(workingItems[i].content || '').trim()) workingItems.splice(i, 1);
+    }
+    tplItems.forEach((it, idx) => {
+      workingItems.push({ id: tmpId(), content: it.content || '', is_done: false, order_index: workingItems.length + idx });
+    });
+    renderItemsEditor(listEl, workingItems);
+    Toast.success(`"${tpl.title}" 템플릿을 적용했습니다`);
   }
 
   function renderItemsEditor(listEl, workingItems) {
