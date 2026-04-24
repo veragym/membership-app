@@ -296,8 +296,10 @@ const SettingsTab = (() => {
             <button type="button" class="btn-icon btn-move-down" ${canMoveDown ? '' : 'disabled'} title="아래로">↓</button>
             <button type="button" class="btn-icon btn-edit"     title="수정">수정</button>
             <button type="button" class="btn-icon btn-deactivate" title="비활성">비활성</button>
+            <button type="button" class="btn-icon btn-delete"    title="완전 삭제">삭제</button>
           ` : `
             <button type="button" class="btn-icon btn-activate" title="다시 활성화">활성화</button>
+            <button type="button" class="btn-icon btn-delete"   title="완전 삭제">삭제</button>
           `}
         </div>
       </div>
@@ -316,6 +318,7 @@ const SettingsTab = (() => {
       row.querySelector('.btn-edit')?.addEventListener('click', () => openEditForm(opt));
       row.querySelector('.btn-deactivate')?.addEventListener('click', () => setActive(opt, false));
       row.querySelector('.btn-activate')?.addEventListener('click', () => setActive(opt, true));
+      row.querySelector('.btn-delete')?.addEventListener('click', () => confirmDelete(opt));
     });
   }
 
@@ -481,6 +484,52 @@ const SettingsTab = (() => {
     const { error: e3 } = await supabase.from('dropdown_options').update({ sort_order: orderB }).eq('id', opt.id);
     if (e3) { Toast.error('순서 변경 실패: ' + e3.message); return; }
 
+    Dropdown.clearCache(activeCategory);
+    await loadCategory(activeCategory);
+  }
+
+  // 삭제: 확인 모달 → DB row 완전 제거
+  function confirmDelete(opt) {
+    Modal.open({
+      type: 'center',
+      title: '옵션 삭제 확인',
+      size: 'sm',
+      html: `
+        <p style="margin:0 0 12px;">
+          <strong>"${escapeHtml(opt.value)}"</strong> 옵션을 완전 삭제하시겠습니까?
+        </p>
+        <p class="form-hint" style="color:var(--color-danger,#dc2626);">
+          * 이 작업은 되돌릴 수 없습니다.<br>
+          * 기존에 이 값을 사용한 레코드(회원 등록, 문의, 업무 등)는 영향받지 않습니다 —<br>
+          &nbsp;&nbsp;DB엔 값이 그대로 남지만 드롭다운에는 더 이상 표시되지 않습니다.<br>
+          * 과거 데이터 집계에 혼란을 주지 않으려면 <strong>비활성</strong>을 권장합니다.
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+          <button type="button" class="btn btn-danger" id="btn-confirm-delete">완전 삭제</button>
+        </div>
+      `,
+      onOpen: (el) => {
+        el.querySelector('#btn-confirm-delete').addEventListener('click', async () => {
+          await deleteOption(opt);
+        });
+      }
+    });
+  }
+
+  async function deleteOption(opt) {
+    const { error } = await supabase
+      .from('dropdown_options')
+      .delete()
+      .eq('id', opt.id);
+
+    if (error) {
+      Toast.error('삭제 실패: ' + error.message);
+      return;
+    }
+
+    Toast.success(`"${opt.value}" 완전 삭제됨`);
+    Modal.close();
     Dropdown.clearCache(activeCategory);
     await loadCategory(activeCategory);
   }
