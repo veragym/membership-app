@@ -4219,6 +4219,14 @@ html, body {
   gap: 8px;
   min-width: 0;
 }
+.plan-pool-group-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .plan-pool-chip {
   display: inline-flex;
   align-items: center;

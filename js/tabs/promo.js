@@ -277,10 +277,10 @@ const PromoTab = (() => {
                 <span class="plan-pool-chip" style="background:${color}">${esc(t.category || '기타')}</span>
                 <span class="plan-pool-group-title" title="${esc(t.title)}">${esc(t.title)}</span>
                 ${completeBadge}
-              </div>
-              <div class="plan-pool-group-line2">
-                <span class="plan-pool-group-count">${pct}%</span>
-                <span class="plan-pool-group-meta">${shortYMD(t.start_date)} ~ ${shortYMD(t.end_date)}</span>
+                <span class="plan-pool-group-right">
+                  <span class="plan-pool-group-count">${pct}%</span>
+                  <span class="plan-pool-group-meta">${shortYMD(t.start_date)} ~ ${shortYMD(t.end_date)}</span>
+                </span>
               </div>
             </div>
           </div>
