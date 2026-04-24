@@ -199,6 +199,21 @@ const StatsTab = (() => {
     };
   }
 
+  // 경과 개월 수 (평균 계산 기준) — 오늘 시점까지만 센다
+  function computeElapsedMonths(period) {
+    const { type, year, sub } = period;
+    const today = new Date();
+    const curY = today.getFullYear(), curM = today.getMonth() + 1;
+    let startM, endM;
+    if (type === 'month')   { startM = sub;           endM = sub; }
+    else if (type==='quarter'){ startM = (sub-1)*3+1; endM = sub*3; }
+    else if (type === 'half'){ startM = sub===1?1:7;  endM = sub===1?6:12; }
+    else                     { startM = 1;            endM = 12; }
+    if (year < curY) return endM - startM + 1; // 과거 연도: 전체 기간
+    if (year > curY) return 0;                 // 미래 연도
+    return Math.max(0, Math.min(endM, curM) - startM + 1);
+  }
+
   function defaultSubFor(type) {
     const d = new Date();
     if (type === 'month')   return d.getMonth() + 1;
@@ -242,9 +257,12 @@ const StatsTab = (() => {
     });
   }
 
-  function renderStaffTable(body, headLabel, amtLabel, sorted, totalCount, total) {
+  function renderStaffTable(body, headLabel, amtLabel, sorted, totalCount, total, elapsed, totalLabel, avgLabel) {
     const fmt = n => n.toLocaleString() + '원';
     if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
+    const avgRow = elapsed > 0
+      ? `<tr class="stats-staff-avg"><td>${avgLabel} <small>(÷${elapsed}개월)</small></td><td>-</td><td class="stats-staff-amount">${fmt(Math.round(total/elapsed))}</td></tr>`
+      : `<tr class="stats-staff-avg"><td>${avgLabel}</td><td>-</td><td class="stats-staff-amount" style="color:var(--color-text-muted)">미래 기간</td></tr>`;
     body.innerHTML = `
       <table class="stats-staff-table">
         <thead><tr><th>${headLabel}</th><th>건수</th><th>${amtLabel}</th></tr></thead>
@@ -254,7 +272,10 @@ const StatsTab = (() => {
             <td class="stats-staff-count">${v.count}건</td>
             <td class="stats-staff-amount">${fmt(v.amount)}</td>
           </tr>`).join('')}</tbody>
-        <tfoot><tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr></tfoot>
+        <tfoot>
+          <tr><td>${totalLabel}</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr>
+          ${avgRow}
+        </tfoot>
       </table>`;
   }
 
@@ -277,7 +298,8 @@ const StatsTab = (() => {
     });
     const sorted = Object.entries(grouped).sort((a,b)=>b[1].amount-a[1].amount);
     const total  = sorted.reduce((s,[,v])=>s+v.amount, 0);
-    renderStaffTable(body, '매출담당', '매출액', sorted, rows.length, total);
+    const elapsed = computeElapsedMonths(fcPeriod);
+    renderStaffTable(body, '매출담당', '매출액', sorted, rows.length, total, elapsed, '총 매출액', '평균 매출액');
   }
 
   async function loadPtData(container) {
@@ -299,7 +321,8 @@ const StatsTab = (() => {
     const sorted     = Object.entries(grouped).sort((a,b)=>b[1].amount-a[1].amount);
     const total      = sorted.reduce((s,[,v])=>s+v.amount, 0);
     const totalCount = sorted.reduce((s,[,v])=>s+v.count, 0);
-    renderStaffTable(body, '계약T', '계약금액', sorted, totalCount, total);
+    const elapsed    = computeElapsedMonths(ptPeriod);
+    renderStaffTable(body, '계약T', '계약금액', sorted, totalCount, total, elapsed, '총 계약금액', '평균 계약금액');
   }
 
   function renderCard(title, rev, fcTarget, ptTarget, opts = {}) {
