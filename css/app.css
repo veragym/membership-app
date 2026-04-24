@@ -2136,6 +2136,33 @@ html, body {
 .stats-staff-card .stats-staff-header h4 { margin: 0; font-size: 14px; font-weight: 700; }
 .stats-staff-card .stats-staff-header h4 small { font-size: 11px; font-weight: 500; color: var(--color-text-muted); margin-left: 4px; }
 .stats-staff-card .stats-staff-body { flex: 1; overflow-y: auto; min-height: 0; }
+.stats-staff-card .stats-staff-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.stats-staff-card .stats-staff-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.stats-staff-card .stats-staff-tabs .stats-staff-tab {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg-1);
+}
+.stats-staff-card .stats-staff-tabs .stats-staff-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.stats-staff-selects { display: flex; gap: 6px; }
+.stats-staff-selects .stats-staff-select { flex: 1; }
 /* 전월/전년 FC/PT 2×2 미니카드 */
 .stats-compare-grid {
   display: grid;

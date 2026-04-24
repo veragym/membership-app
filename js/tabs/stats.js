@@ -17,11 +17,13 @@ const StatsTab = (() => {
   let allProducts = [];
   let excludedProducts = new Set();
 
-  // 우측 패널 (매출담당/계약T 월별 통계) — 월 단일 상태
-  let staffSimpleMonth = (() => {
+  // 우측 패널 — 회원권/PT 각각 독립된 기간 상태 (월/분기/반기/연간)
+  const _defaultPeriod = () => {
     const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  })();
+    return { type: 'month', year: d.getFullYear(), sub: d.getMonth() + 1 };
+  };
+  let fcPeriod = _defaultPeriod();
+  let ptPeriod = _defaultPeriod();
 
   // 담당자별 통계 패널 상태
 
@@ -111,8 +113,8 @@ const StatsTab = (() => {
           <div class="stats-card-v2 stats-staff-card">
             <div class="stats-staff-header">
               <h4>회원권 <small>(매출담당자별)</small></h4>
-              <input type="month" id="staffMonthPick" value="${staffSimpleMonth}" class="stats-staff-select">
             </div>
+            ${renderPeriodControls('fc', fcPeriod)}
             <div id="staffBodyFc" class="stats-staff-body"></div>
           </div>
           ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
@@ -120,6 +122,7 @@ const StatsTab = (() => {
             <div class="stats-staff-header">
               <h4>PT <small>(계약T별)</small></h4>
             </div>
+            ${renderPeriodControls('pt', ptPeriod)}
             <div id="staffBodyPt" class="stats-staff-body"></div>
           </div>
         </div>
@@ -144,75 +147,159 @@ const StatsTab = (() => {
         .catch(() => Toast.error('복사 실패'));
     });
 
-    // 우측 스태프 카드 (회원권 + PT 동시 로드)
-    container.querySelector('#staffMonthPick').addEventListener('change', e => {
-      staffSimpleMonth = e.target.value;
-      loadStaffData(container);
-    });
-    loadStaffData(container);
+    // 우측 스태프 카드 — 회원권/PT 각각 독립 이벤트
+    bindPeriodControls(container);
+    loadFcData(container);
+    loadPtData(container);
   }
 
-  async function loadStaffData(container) {
-    const fcBody = container.querySelector('#staffBodyFc');
-    const ptBody = container.querySelector('#staffBodyPt');
-    if (!fcBody || !ptBody) return;
-    fcBody.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
-    ptBody.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  // ───────── 우측 패널: 기간 컨트롤 헬퍼 ─────────
+  function renderPeriodControls(cardId, period) {
+    const types = [['month','월'], ['quarter','분기'], ['half','반기'], ['year','연간']];
+    const years = [2024, 2025, 2026, 2027];
+    return `
+      <div class="stats-staff-controls">
+        <div class="stats-staff-tabs">
+          ${types.map(([v,l]) => `
+            <button class="stats-staff-tab ${period.type===v?'active':''}" data-card="${cardId}" data-period-type="${v}">${l}</button>
+          `).join('')}
+        </div>
+        <div class="stats-staff-selects">
+          <select class="stats-staff-select" data-card="${cardId}" data-field="year">
+            ${years.map(y => `<option value="${y}" ${period.year===y?'selected':''}>${y}년</option>`).join('')}
+          </select>
+          <select class="stats-staff-select" data-card="${cardId}" data-field="sub" ${period.type==='year'?'style="display:none"':''}>
+            ${buildPeriodSubOptions(period.type, period.sub)}
+          </select>
+        </div>
+      </div>
+    `;
+  }
 
-    const [sy, sm] = staffSimpleMonth.split('-');
-    const fromDate = `${sy}-${sm}-01`;
-    const toDate   = isoDate(new Date(+sy, +sm, 0));
-    const fmt = n => n.toLocaleString() + '원';
+  function buildPeriodSubOptions(type, selected) {
+    if (type === 'month') return Array.from({length:12},(_,i)=>i+1)
+      .map(mo => `<option value="${mo}" ${selected===mo?'selected':''}>${mo}월</option>`).join('');
+    if (type === 'quarter') return [1,2,3,4]
+      .map(q => `<option value="${q}" ${selected===q?'selected':''}>${q}분기</option>`).join('');
+    if (type === 'half') return [1,2]
+      .map(h => `<option value="${h}" ${selected===h?'selected':''}>${h===1?'상반기':'하반기'}</option>`).join('');
+    return '';
+  }
 
-    const renderTable = (body, headLabel, amtLabel, sorted, totalCount, total) => {
-      if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
-      body.innerHTML = `
-        <table class="stats-staff-table">
-          <thead><tr><th>${headLabel}</th><th>건수</th><th>${amtLabel}</th></tr></thead>
-          <tbody>${sorted.map(([name,v])=>`
-            <tr>
-              <td>${escHtml(name)}</td>
-              <td class="stats-staff-count">${v.count}건</td>
-              <td class="stats-staff-amount">${fmt(v.amount)}</td>
-            </tr>`).join('')}</tbody>
-          <tfoot><tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr></tfoot>
-        </table>`;
+  function computePeriodRange(period) {
+    const { type, year, sub } = period;
+    let startM, endM;
+    if (type === 'month')   { startM = sub;           endM = sub; }
+    else if (type==='quarter'){ startM = (sub-1)*3+1; endM = sub*3; }
+    else if (type === 'half'){ startM = sub===1?1:7;  endM = sub===1?6:12; }
+    else                     { startM = 1;            endM = 12; } // year
+    return {
+      fromDate: `${year}-${String(startM).padStart(2,'0')}-01`,
+      toDate:   isoDate(new Date(year, endM, 0)),
     };
+  }
 
-    // 회원권 (매출담당자별)
-    const [{ data: fcData }, { data: ptData }] = await Promise.all([
-      supabase.from('registrations')
-        .select('sales_manager, total_payment, product')
-        .gte('registered_date', fromDate).lte('registered_date', toDate),
-      supabase.from('pt_registrations')
-        .select('contract_amount, contract_trainer:trainers!pt_registrations_contract_trainer_id_fkey(name)')
-        .gte('contract_date', fromDate).lte('contract_date', toDate),
-    ]);
+  function defaultSubFor(type) {
+    const d = new Date();
+    if (type === 'month')   return d.getMonth() + 1;
+    if (type === 'quarter') return Math.ceil((d.getMonth()+1)/3);
+    if (type === 'half')    return d.getMonth() < 6 ? 1 : 2;
+    return 1; // year: unused
+  }
 
-    const fcRows = (fcData||[]).filter(r => !excludedProducts.has(r.product));
-    const fcGrouped = {};
-    fcRows.forEach(r => {
+  function bindPeriodControls(container) {
+    const getPeriod = card => card === 'fc' ? fcPeriod : ptPeriod;
+    const reload    = (container, card) => card === 'fc' ? loadFcData(container) : loadPtData(container);
+
+    container.querySelectorAll('.stats-staff-tab[data-period-type]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.dataset.card;
+        const p = getPeriod(card);
+        p.type = btn.dataset.periodType;
+        p.sub  = defaultSubFor(p.type);
+        container.querySelectorAll(`.stats-staff-tab[data-card="${card}"]`).forEach(b => {
+          b.classList.toggle('active', b.dataset.periodType === p.type);
+        });
+        const subSel = container.querySelector(`.stats-staff-select[data-card="${card}"][data-field="sub"]`);
+        subSel.innerHTML = buildPeriodSubOptions(p.type, p.sub);
+        subSel.style.display = p.type === 'year' ? 'none' : '';
+        reload(container, card);
+      });
+    });
+    container.querySelectorAll('.stats-staff-select[data-field="year"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const card = sel.dataset.card;
+        getPeriod(card).year = +sel.value;
+        reload(container, card);
+      });
+    });
+    container.querySelectorAll('.stats-staff-select[data-field="sub"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const card = sel.dataset.card;
+        getPeriod(card).sub = +sel.value;
+        reload(container, card);
+      });
+    });
+  }
+
+  function renderStaffTable(body, headLabel, amtLabel, sorted, totalCount, total) {
+    const fmt = n => n.toLocaleString() + '원';
+    if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
+    body.innerHTML = `
+      <table class="stats-staff-table">
+        <thead><tr><th>${headLabel}</th><th>건수</th><th>${amtLabel}</th></tr></thead>
+        <tbody>${sorted.map(([name,v])=>`
+          <tr>
+            <td>${escHtml(name)}</td>
+            <td class="stats-staff-count">${v.count}건</td>
+            <td class="stats-staff-amount">${fmt(v.amount)}</td>
+          </tr>`).join('')}</tbody>
+        <tfoot><tr><td>합계</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr></tfoot>
+      </table>`;
+  }
+
+  async function loadFcData(container) {
+    const body = container.querySelector('#staffBodyFc');
+    if (!body) return;
+    body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    const { fromDate, toDate } = computePeriodRange(fcPeriod);
+
+    const { data } = await supabase.from('registrations')
+      .select('sales_manager, total_payment, product')
+      .gte('registered_date', fromDate).lte('registered_date', toDate);
+    const rows = (data||[]).filter(r => !excludedProducts.has(r.product));
+    const grouped = {};
+    rows.forEach(r => {
       const name = r.sales_manager || '(미지정)';
-      if (!fcGrouped[name]) fcGrouped[name] = { amount: 0, count: 0 };
-      fcGrouped[name].amount += Math.round((r.total_payment||0)/1.1);
-      fcGrouped[name].count++;
+      if (!grouped[name]) grouped[name] = { amount: 0, count: 0 };
+      grouped[name].amount += Math.round((r.total_payment||0)/1.1);
+      grouped[name].count++;
     });
-    const fcSorted = Object.entries(fcGrouped).sort((a,b)=>b[1].amount-a[1].amount);
-    const fcTotal  = fcSorted.reduce((s,[,v])=>s+v.amount, 0);
-    renderTable(fcBody, '매출담당', '매출액', fcSorted, fcRows.length, fcTotal);
+    const sorted = Object.entries(grouped).sort((a,b)=>b[1].amount-a[1].amount);
+    const total  = sorted.reduce((s,[,v])=>s+v.amount, 0);
+    renderStaffTable(body, '매출담당', '매출액', sorted, rows.length, total);
+  }
 
-    // PT (계약T별)
-    const ptGrouped = {};
-    (ptData||[]).forEach(r => {
+  async function loadPtData(container) {
+    const body = container.querySelector('#staffBodyPt');
+    if (!body) return;
+    body.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    const { fromDate, toDate } = computePeriodRange(ptPeriod);
+
+    const { data } = await supabase.from('pt_registrations')
+      .select('contract_amount, contract_trainer:trainers!pt_registrations_contract_trainer_id_fkey(name)')
+      .gte('contract_date', fromDate).lte('contract_date', toDate);
+    const grouped = {};
+    (data||[]).forEach(r => {
       const name = r.contract_trainer?.name || '(미지정)';
-      if (!ptGrouped[name]) ptGrouped[name] = { amount: 0, count: 0 };
-      ptGrouped[name].amount += (r.contract_amount||0);
-      ptGrouped[name].count++;
+      if (!grouped[name]) grouped[name] = { amount: 0, count: 0 };
+      grouped[name].amount += (r.contract_amount||0);
+      grouped[name].count++;
     });
-    const ptSorted     = Object.entries(ptGrouped).sort((a,b)=>b[1].amount-a[1].amount);
-    const ptTotal      = ptSorted.reduce((s,[,v])=>s+v.amount, 0);
-    const ptTotalCount = ptSorted.reduce((s,[,v])=>s+v.count, 0);
-    renderTable(ptBody, '계약T', '계약금액', ptSorted, ptTotalCount, ptTotal);
+    const sorted     = Object.entries(grouped).sort((a,b)=>b[1].amount-a[1].amount);
+    const total      = sorted.reduce((s,[,v])=>s+v.amount, 0);
+    const totalCount = sorted.reduce((s,[,v])=>s+v.count, 0);
+    renderStaffTable(body, '계약T', '계약금액', sorted, totalCount, total);
   }
 
   function renderCard(title, rev, fcTarget, ptTarget, opts = {}) {
