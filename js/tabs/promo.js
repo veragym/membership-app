@@ -78,9 +78,11 @@ const PromoTab = (() => {
       <div class="ops-layout">
         <div class="ops-panel">
           <div class="ops-panel-header">
-            <div style="display:flex;align-items:center;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span class="ops-panel-title">일정표</span>
               <button type="button" class="btn-share-sched" id="btnShareSched" title="PC 화면용 PNG 자동 저장">📷 시간표 공유</button>
+              <button type="button" class="btn-share-sched" id="btnSchedTplMgr" title="반복되는 시간단위 일정 템플릿 관리">📋 고정일정 관리</button>
+              <button type="button" class="btn-share-sched" id="btnSchedTplGen" title="오늘에 맞는 고정일정을 일괄 생성">↻ 오늘 고정일정 생성</button>
             </div>
             <span style="font-size:11px;color:var(--color-text-muted)">오늘·내일 · 30분 단위</span>
           </div>
@@ -128,6 +130,8 @@ const PromoTab = (() => {
       </div>
     `;
     document.getElementById('btnShareSched').addEventListener('click', shareScheduleImage);
+    document.getElementById('btnSchedTplMgr').addEventListener('click', openScheduleTemplateListModal);
+    document.getElementById('btnSchedTplGen').addEventListener('click', handleGenerateTodaySchedTemplates);
     document.getElementById('btnUpcomingDelSelected').addEventListener('click', handleUpcomingDeleteSelected);
     document.getElementById('btnUpcomingDelAll').addEventListener('click', handleUpcomingDeleteAll);
     renderReservations();
@@ -413,6 +417,255 @@ const PromoTab = (() => {
   //   ├────────────┴───────────┤
   //   │      예약자 리스트      │
   //   └────────────────────────┘
+  // ═══ 고정일정 (schedule_templates) 관리 ═══
+  // 요일 0=일, 6=토
+  const DOW_LABELS = ['일','월','화','수','목','금','토'];
+
+  async function openScheduleTemplateListModal() {
+    Modal.open({
+      type: 'center', size: 'lg',
+      title: '고정일정 관리',
+      html: `
+        <div class="plan-tpl-wrap">
+          <div class="plan-tpl-toolbar">
+            <span class="plan-tpl-desc">반복되는 시간단위 일정을 템플릿으로 등록해두면 "↻ 오늘 고정일정 생성" 버튼 한 번으로 일괄 생성됩니다.</span>
+            <button type="button" class="plan-btn-primary" id="schedTplNew">+ 새 템플릿</button>
+          </div>
+          <div class="plan-tpl-list" id="schedTplList">
+            <div class="ops-placeholder">불러오는 중…</div>
+          </div>
+        </div>
+      `,
+      onOpen: (el) => {
+        el.querySelector('#schedTplNew').addEventListener('click', () => openScheduleTemplateEditModal(null));
+        loadScheduleTemplates(el.querySelector('#schedTplList'));
+      }
+    });
+  }
+
+  async function loadScheduleTemplates(listEl) {
+    const { data, error } = await supabase
+      .from('schedule_templates')
+      .select('*')
+      .order('is_active', { ascending: false })
+      .order('start_time')
+      .order('title');
+    if (error) {
+      listEl.innerHTML = `<div class="ops-placeholder">불러오기 실패: ${esc(error.message)}</div>`;
+      return;
+    }
+    const rows = data || [];
+    if (!rows.length) {
+      listEl.innerHTML = `<div class="ops-placeholder">등록된 고정일정이 없습니다. "+ 새 템플릿"으로 추가해 보세요.</div>`;
+      return;
+    }
+    listEl.innerHTML = rows.map(t => {
+      const dowLabel = (!t.days_of_week || !t.days_of_week.length)
+        ? '매일'
+        : t.days_of_week.map(d => DOW_LABELS[d]).join('·');
+      const color = t.color || TYPE_COLORS[t.type] || TYPE_COLORS['업무'];
+      const timeLabel = `${String(t.start_time || '').slice(0,5)}${t.end_time ? '–' + String(t.end_time).slice(0,5) : ''}`;
+      const activeCls = t.is_active ? '' : 'is-inactive';
+      return `
+        <div class="plan-tpl-row ${activeCls}" data-id="${t.id}">
+          <div class="plan-tpl-row-main">
+            <div class="plan-tpl-row-line1">
+              <span class="plan-pool-chip" style="background:${color}">${esc(t.type || '업무')}</span>
+              <span class="plan-tpl-row-title">${esc(t.title || '')}</span>
+              ${t.is_active ? '' : '<span class="plan-tpl-inactive-badge">비활성</span>'}
+            </div>
+            <div class="plan-tpl-row-line2">
+              <span class="plan-pool-group-meta">${timeLabel}</span>
+              <span class="plan-pool-group-meta">· ${dowLabel}</span>
+              ${t.notes ? `<span class="plan-pool-group-meta">· ${esc(t.notes)}</span>` : ''}
+            </div>
+          </div>
+          <div class="plan-tpl-row-actions">
+            <button type="button" class="plan-btn-sm" data-role="edit">수정</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    listEl.querySelectorAll('.plan-tpl-row').forEach(row => {
+      const id = row.dataset.id;
+      row.querySelector('[data-role=edit]').addEventListener('click', () => openScheduleTemplateEditModal(id));
+    });
+  }
+
+  async function openScheduleTemplateEditModal(tplId) {
+    let tpl = { id: null, title: '', type: '업무', start_time: '09:00', end_time: '09:30', notes: '', days_of_week: [], is_active: true };
+    if (tplId) {
+      const { data, error } = await supabase.from('schedule_templates').select('*').eq('id', tplId).single();
+      if (error || !data) { Toast.error('템플릿 로드 실패'); return; }
+      tpl = data;
+      tpl.start_time = String(tpl.start_time || '').slice(0,5);
+      tpl.end_time   = tpl.end_time ? String(tpl.end_time).slice(0,5) : '';
+    }
+    const isEdit = !!tplId;
+
+    Modal.open({
+      type: 'center', size: 'md',
+      title: isEdit ? '고정일정 수정' : '고정일정 등록',
+      html: `
+        <form id="schedTplForm" class="sched-form">
+          <div class="form-row">
+            <label>제목</label>
+            <input type="text" name="title" value="${esc(tpl.title)}" maxlength="120" required placeholder="예: 전일 원장 스캔파일 최신화">
+          </div>
+          <div class="form-row">
+            <label>유형</label>
+            <div class="sched-type-pills">
+              ${TYPE_OPTIONS.map(t => `<button type="button" class="sched-type-pill ${t === tpl.type ? 'active' : ''}" data-type="${t}" style="--pill-color:${TYPE_COLORS[t]}">${t}</button>`).join('')}
+            </div>
+            <input type="hidden" name="type" value="${tpl.type}">
+          </div>
+          <div class="form-row-2">
+            <div class="form-row"><label>시작</label><input type="time" name="start_time" value="${tpl.start_time}" step="1800" required></div>
+            <div class="form-row"><label>종료</label><input type="time" name="end_time" value="${tpl.end_time}" step="1800"></div>
+            <div class="form-row">
+              <label>활성</label>
+              <div style="padding-top:10px;">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="checkbox" name="is_active" ${tpl.is_active ? 'checked' : ''} style="width:16px;height:16px">
+                  <span style="font-size:13px">활성화</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>요일 <span style="color:var(--color-text-muted);font-weight:400">(선택 없음 = 매일)</span></label>
+            <div class="sched-type-pills" id="schedTplDowPills">
+              ${DOW_LABELS.map((d, i) => `<button type="button" class="sched-type-pill ${(tpl.days_of_week||[]).includes(i) ? 'active' : ''}" data-dow="${i}" style="--pill-color:var(--color-primary)">${d}</button>`).join('')}
+            </div>
+          </div>
+          <div class="form-row">
+            <label>메모</label>
+            <textarea name="notes" rows="2" placeholder="선택">${esc(tpl.notes || '')}</textarea>
+          </div>
+          <div class="sched-form-actions">
+            ${isEdit ? `<button type="button" class="btn btn-danger" id="schedTplDelBtn">삭제</button>` : ''}
+            <button type="button" class="btn btn-secondary" id="schedTplCancelBtn">취소</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? '수정' : '등록'}</button>
+          </div>
+        </form>
+      `,
+      onOpen: (el) => {
+        // type pill 선택
+        const typePills = el.querySelectorAll('.sched-type-pills .sched-type-pill[data-type]');
+        const typeInput = el.querySelector('input[name="type"]');
+        typePills.forEach(p => p.addEventListener('click', () => {
+          typePills.forEach(x => x.classList.toggle('active', x === p));
+          typeInput.value = p.dataset.type;
+        }));
+        // dow pill 다중 토글
+        const dowPills = el.querySelectorAll('#schedTplDowPills .sched-type-pill[data-dow]');
+        dowPills.forEach(p => p.addEventListener('click', () => p.classList.toggle('active')));
+
+        el.querySelector('#schedTplCancelBtn').addEventListener('click', () => Modal.close());
+        if (isEdit) {
+          el.querySelector('#schedTplDelBtn').addEventListener('click', async () => {
+            if (!confirm('이 템플릿을 삭제하시겠습니까? (이미 생성된 일정은 유지됩니다)')) return;
+            const { error } = await supabase.from('schedule_templates').delete().eq('id', tplId);
+            if (error) { Toast.error('삭제 실패: ' + error.message); return; }
+            Toast.success('삭제되었습니다');
+            openScheduleTemplateListModal();
+          });
+        }
+        el.querySelector('#schedTplForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          handleScheduleTemplateSubmit(e.target, tplId, el);
+        });
+      }
+    });
+  }
+
+  async function handleScheduleTemplateSubmit(form, editId, formEl) {
+    const fd = new FormData(form);
+    const trainer = (typeof Auth !== 'undefined' && Auth.getTrainer) ? Auth.getTrainer() : null;
+    const dowList = Array.from(formEl.querySelectorAll('#schedTplDowPills .sched-type-pill.active'))
+      .map(p => Number(p.dataset.dow))
+      .filter(n => Number.isInteger(n) && n >= 0 && n <= 6);
+    const payload = {
+      title: (fd.get('title') || '').trim(),
+      type:  fd.get('type') || '업무',
+      start_time: fd.get('start_time') || null,
+      end_time:   fd.get('end_time') || null,
+      notes: (fd.get('notes') || '').trim() || null,
+      days_of_week: dowList,
+      is_active: !!fd.get('is_active')
+    };
+    if (!payload.title) { Toast.error('제목은 필수'); return; }
+    if (!payload.start_time) { Toast.error('시작 시각은 필수'); return; }
+    try {
+      if (editId) {
+        const { error } = await supabase.from('schedule_templates').update(payload).eq('id', editId);
+        if (error) throw error;
+      } else {
+        payload.created_by = trainer?.id || null;
+        const { error } = await supabase.from('schedule_templates').insert(payload);
+        if (error) throw error;
+      }
+      Toast.success(editId ? '수정되었습니다' : '등록되었습니다');
+      openScheduleTemplateListModal();
+    } catch (e) {
+      console.error('schedule template save failed:', e);
+      Toast.error('저장 실패: ' + (e.message || e));
+    }
+  }
+
+  // 오늘 날짜에 맞는 고정일정 일괄 생성 (요일 필터 적용, 중복 방지)
+  async function handleGenerateTodaySchedTemplates() {
+    const now = new Date();
+    const todayYMD = toYMD(now);
+    const dow = now.getDay();  // 0=Sun..6=Sat
+
+    const { data: tpls, error: e1 } = await supabase
+      .from('schedule_templates')
+      .select('*')
+      .eq('is_active', true);
+    if (e1) { Toast.error('템플릿 조회 실패: ' + e1.message); return; }
+    const activeTpls = (tpls || []).filter(t => !t.days_of_week || !t.days_of_week.length || t.days_of_week.includes(dow));
+    if (!activeTpls.length) {
+      Toast.info('오늘 요일에 적용할 활성 고정일정이 없습니다.');
+      return;
+    }
+
+    // 이미 오늘 날짜로 생성된 template_id 조회 → 중복 방지
+    const { data: existing, error: e2 } = await supabase
+      .from('staff_schedules')
+      .select('template_id')
+      .eq('template_date', todayYMD)
+      .not('template_id', 'is', null);
+    if (e2) { Toast.error('기존 일정 조회 실패: ' + e2.message); return; }
+    const existingIds = new Set((existing || []).map(r => r.template_id));
+
+    const toInsert = activeTpls
+      .filter(t => !existingIds.has(t.id))
+      .map(t => ({
+        staff_id:     null,
+        sched_date:   todayYMD,
+        start_time:   t.start_time,
+        end_time:     t.end_time,
+        type:         t.type || '업무',
+        title:        t.title,
+        notes:        t.notes,
+        color:        t.color,
+        status:       'active',
+        template_id:  t.id,
+        template_date: todayYMD
+      }));
+
+    if (!toInsert.length) {
+      Toast.info('오늘 고정일정은 이미 모두 생성되어 있습니다.');
+      return;
+    }
+
+    const { error: e3 } = await supabase.from('staff_schedules').insert(toInsert);
+    if (e3) { Toast.error('일괄 생성 실패: ' + e3.message); return; }
+    Toast.success(`${toInsert.length}건 생성되었습니다`);
+    loadScheduleView();
+  }
+
   async function shareScheduleImage() {
     if (typeof html2canvas === 'undefined') {
       Toast.error('이미지 라이브러리 로드 실패 — 새로고침 후 재시도해주세요.');
@@ -789,6 +1042,14 @@ const PromoTab = (() => {
       title: isEdit ? '일정 수정' : '일정 등록',
       html: `
         <form id="schedForm" class="sched-form">
+          ${isEdit ? '' : `
+          <div class="form-row">
+            <label>고정일정에서 불러오기 <span style="color:var(--color-text-muted);font-weight:400">(선택)</span></label>
+            <select id="schedTplPick">
+              <option value="">— 선택 —</option>
+            </select>
+          </div>
+          `}
           <div class="form-row">
             <label>유형</label>
             <div class="sched-type-pills">
@@ -838,8 +1099,63 @@ const PromoTab = (() => {
 
         // 연결 체크리스트 옵션 로드 (미완료 TaskItem — 수정 모드면 현재 선택 항목도 포함)
         loadTaskItemOptions(el.querySelector('#schedTaskItemSelect'), taskItemIdVal, isEdit ? row : null);
+
+        // 고정일정 템플릿 드롭다운 (신규 등록일 때만)
+        const schedTplSel = el.querySelector('#schedTplPick');
+        if (schedTplSel) {
+          loadScheduleTemplatesForPicker(schedTplSel);
+          schedTplSel.addEventListener('change', () => {
+            const tplId = schedTplSel.value;
+            if (!tplId) return;
+            applyScheduleTemplateToForm(el, tplId);
+            schedTplSel.value = '';
+          });
+        }
       }
     });
+  }
+
+  // 고정일정 템플릿 옵션 로드
+  async function loadScheduleTemplatesForPicker(selectEl) {
+    const { data, error } = await supabase
+      .from('schedule_templates')
+      .select('id, title, type, start_time, end_time, days_of_week')
+      .eq('is_active', true)
+      .order('start_time').order('title');
+    if (error) { console.error('sched template picker load failed:', error); return; }
+    const opts = (data || []).map(t => {
+      const time = `${String(t.start_time || '').slice(0,5)}${t.end_time ? '–' + String(t.end_time).slice(0,5) : ''}`;
+      const dow = (!t.days_of_week || !t.days_of_week.length) ? '매일' : t.days_of_week.map(d => DOW_LABELS[d]).join('·');
+      return `<option value="${t.id}">${esc(`[${t.type}] ${t.title} · ${time} · ${dow}`)}</option>`;
+    }).join('');
+    selectEl.innerHTML = `<option value="">— 선택 —</option>` + opts;
+  }
+
+  // 선택된 템플릿을 현재 일정 폼에 적용
+  async function applyScheduleTemplateToForm(formEl, tplId) {
+    const { data: tpl, error } = await supabase
+      .from('schedule_templates').select('*').eq('id', tplId).single();
+    if (error || !tpl) { Toast.error('템플릿 로드 실패'); return; }
+
+    const titleInput = formEl.querySelector('input[name="title"]');
+    if (titleInput) titleInput.value = tpl.title || '';
+
+    // type 핍 클래스 토글 + hidden input
+    const typeInput = formEl.querySelector('input[name="type"]');
+    if (typeInput && tpl.type) typeInput.value = tpl.type;
+    formEl.querySelectorAll('.sched-type-pill[data-type]').forEach(p => {
+      p.classList.toggle('active', p.dataset.type === tpl.type);
+    });
+
+    const startInp = formEl.querySelector('input[name="start_time"]');
+    const endInp   = formEl.querySelector('input[name="end_time"]');
+    if (startInp && tpl.start_time) startInp.value = String(tpl.start_time).slice(0,5);
+    if (endInp)                    endInp.value   = tpl.end_time ? String(tpl.end_time).slice(0,5) : '';
+
+    const notesInp = formEl.querySelector('textarea[name="notes"]');
+    if (notesInp) notesInp.value = tpl.notes || '';
+
+    Toast.success(`"${tpl.title}" 템플릿을 적용했습니다`);
   }
 
   // 미완료 task_items 옵션 로드 — PromoCalendarTab.fetchOpenTaskItems 재사용
