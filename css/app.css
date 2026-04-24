@@ -2163,6 +2163,8 @@ html, body {
 }
 .stats-staff-selects { display: flex; gap: 6px; }
 .stats-staff-selects .stats-staff-select { flex: 1; }
+.stats-staff-avg-cell { color: var(--color-primary); font-weight: 600; }
+.stats-staff-table th small { font-size: 10px; font-weight: 500; color: var(--color-text-muted); }
 /* 전월/전년 FC/PT 2×2 미니카드 */
 .stats-compare-grid {
   display: grid;

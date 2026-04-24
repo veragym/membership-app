@@ -257,24 +257,33 @@ const StatsTab = (() => {
     });
   }
 
-  function renderStaffTable(body, headLabel, amtLabel, sorted, totalCount, total, elapsed, totalLabel, avgLabel) {
+  function renderStaffTable(body, headLabel, amtLabel, sorted, totalCount, total, elapsed, _totalLabel, avgLabel) {
     const fmt = n => n.toLocaleString() + '원';
     if (!sorted.length) { body.innerHTML = '<div class="stats-staff-empty">해당 기간 매출 없음</div>'; return; }
-    const avgRow = elapsed > 0
-      ? `<tr class="stats-staff-avg"><td>${avgLabel} <small>(÷${elapsed}개월)</small></td><td>-</td><td class="stats-staff-amount">${fmt(Math.round(total/elapsed))}</td></tr>`
-      : `<tr class="stats-staff-avg"><td>${avgLabel}</td><td>-</td><td class="stats-staff-amount" style="color:var(--color-text-muted)">미래 기간</td></tr>`;
+    const avgHead = elapsed > 0 ? `${avgLabel} <small>(÷${elapsed}개월)</small>` : avgLabel;
+    const avgCell = amt => elapsed > 0 ? fmt(Math.round(amt/elapsed)) : '-';
     body.innerHTML = `
       <table class="stats-staff-table">
-        <thead><tr><th>${headLabel}</th><th>건수</th><th>${amtLabel}</th></tr></thead>
+        <thead><tr>
+          <th>${headLabel}</th>
+          <th>건수</th>
+          <th>${amtLabel}</th>
+          <th>${avgHead}</th>
+        </tr></thead>
         <tbody>${sorted.map(([name,v])=>`
           <tr>
             <td>${escHtml(name)}</td>
             <td class="stats-staff-count">${v.count}건</td>
             <td class="stats-staff-amount">${fmt(v.amount)}</td>
+            <td class="stats-staff-amount stats-staff-avg-cell">${avgCell(v.amount)}</td>
           </tr>`).join('')}</tbody>
         <tfoot>
-          <tr><td>${totalLabel}</td><td>${totalCount}건</td><td class="stats-staff-amount">${fmt(total)}</td></tr>
-          ${avgRow}
+          <tr>
+            <td>합계</td>
+            <td>${totalCount}건</td>
+            <td class="stats-staff-amount">${fmt(total)}</td>
+            <td class="stats-staff-amount stats-staff-avg-cell">${avgCell(total)}</td>
+          </tr>
         </tfoot>
       </table>`;
   }
