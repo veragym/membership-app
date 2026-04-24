@@ -421,6 +421,35 @@ const PromoTab = (() => {
   // 요일 0=일, 6=토
   const DOW_LABELS = ['일','월','화','수','목','금','토'];
 
+  // 소요시간 선택지 — 매일 실행 시각이 다르므로 start_time 대신 duration 저장
+  const DURATION_OPTIONS = [
+    { min: 15,  label: '15분' },
+    { min: 30,  label: '30분' },
+    { min: 45,  label: '45분' },
+    { min: 60,  label: '1시간' },
+    { min: 90,  label: '1시간 30분' },
+    { min: 120, label: '2시간' },
+    { min: 180, label: '3시간' },
+    { min: 240, label: '4시간' },
+  ];
+  function durationLabel(min) {
+    const m = Number(min) || 30;
+    const hit = DURATION_OPTIONS.find(o => o.min === m);
+    if (hit) return hit.label;
+    if (m % 60 === 0) return `${m / 60}시간`;
+    if (m > 60) return `${Math.floor(m / 60)}시간 ${m % 60}분`;
+    return `${m}분`;
+  }
+  // "HH:MM" + duration_min → "HH:MM"
+  function addMinutesHHMM(hhmm, minutesToAdd) {
+    if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return '';
+    const [h, m] = hhmm.split(':').map(Number);
+    const total = h * 60 + m + Number(minutesToAdd || 0);
+    const nh = Math.floor(total / 60) % 24;
+    const nm = total % 60;
+    return `${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`;
+  }
+
   async function openScheduleTemplateListModal() {
     Modal.open({
       type: 'center', size: 'lg',
@@ -448,7 +477,6 @@ const PromoTab = (() => {
       .from('schedule_templates')
       .select('*')
       .order('is_active', { ascending: false })
-      .order('start_time')
       .order('title');
     if (error) {
       listEl.innerHTML = `<div class="ops-placeholder">불러오기 실패: ${esc(error.message)}</div>`;
@@ -464,7 +492,7 @@ const PromoTab = (() => {
         ? '매일'
         : t.days_of_week.map(d => DOW_LABELS[d]).join('·');
       const color = t.color || TYPE_COLORS[t.type] || TYPE_COLORS['업무'];
-      const timeLabel = `${String(t.start_time || '').slice(0,5)}${t.end_time ? '–' + String(t.end_time).slice(0,5) : ''}`;
+      const durLabel = durationLabel(t.duration_min);
       const activeCls = t.is_active ? '' : 'is-inactive';
       return `
         <div class="plan-tpl-row ${activeCls}" data-id="${t.id}">
@@ -475,7 +503,7 @@ const PromoTab = (() => {
               ${t.is_active ? '' : '<span class="plan-tpl-inactive-badge">비활성</span>'}
             </div>
             <div class="plan-tpl-row-line2">
-              <span class="plan-pool-group-meta">${timeLabel}</span>
+              <span class="plan-pool-group-meta">${durLabel}</span>
               <span class="plan-pool-group-meta">· ${dowLabel}</span>
               ${t.notes ? `<span class="plan-pool-group-meta">· ${esc(t.notes)}</span>` : ''}
             </div>
@@ -493,13 +521,12 @@ const PromoTab = (() => {
   }
 
   async function openScheduleTemplateEditModal(tplId) {
-    let tpl = { id: null, title: '', type: '업무', start_time: '09:00', end_time: '09:30', notes: '', days_of_week: [], is_active: true };
+    let tpl = { id: null, title: '', type: '업무', duration_min: 30, notes: '', days_of_week: [], is_active: true };
     if (tplId) {
       const { data, error } = await supabase.from('schedule_templates').select('*').eq('id', tplId).single();
       if (error || !data) { Toast.error('템플릿 로드 실패'); return; }
       tpl = data;
-      tpl.start_time = String(tpl.start_time || '').slice(0,5);
-      tpl.end_time   = tpl.end_time ? String(tpl.end_time).slice(0,5) : '';
+      tpl.duration_min = Number(tpl.duration_min) || 30;
     }
     const isEdit = !!tplId;
 
@@ -519,18 +546,19 @@ const PromoTab = (() => {
             </div>
             <input type="hidden" name="type" value="${tpl.type}">
           </div>
-          <div class="form-row-2">
-            <div class="form-row"><label>시작</label><input type="time" name="start_time" value="${tpl.start_time}" step="1800" required></div>
-            <div class="form-row"><label>종료</label><input type="time" name="end_time" value="${tpl.end_time}" step="1800"></div>
-            <div class="form-row">
-              <label>활성</label>
-              <div style="padding-top:10px;">
-                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
-                  <input type="checkbox" name="is_active" ${tpl.is_active ? 'checked' : ''} style="width:16px;height:16px">
-                  <span style="font-size:13px">활성화</span>
-                </label>
-              </div>
+          <div class="form-row">
+            <label>소요시간 <span style="color:var(--color-text-muted);font-weight:400">(실제 실행시각은 매일 달라도 OK)</span></label>
+            <div class="sched-type-pills" id="schedTplDurPills">
+              ${DURATION_OPTIONS.map(o => `<button type="button" class="sched-type-pill ${o.min === tpl.duration_min ? 'active' : ''}" data-dur="${o.min}" style="--pill-color:var(--color-primary)">${o.label}</button>`).join('')}
             </div>
+            <input type="hidden" name="duration_min" value="${tpl.duration_min}">
+          </div>
+          <div class="form-row">
+            <label>활성</label>
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" name="is_active" ${tpl.is_active ? 'checked' : ''} style="width:16px;height:16px">
+              <span style="font-size:13px">활성화</span>
+            </label>
           </div>
           <div class="form-row">
             <label>요일 <span style="color:var(--color-text-muted);font-weight:400">(선택 없음 = 매일)</span></label>
@@ -550,12 +578,19 @@ const PromoTab = (() => {
         </form>
       `,
       onOpen: (el) => {
-        // type pill 선택
-        const typePills = el.querySelectorAll('.sched-type-pills .sched-type-pill[data-type]');
+        // type pill 선택 (유형 영역 pill 만 대상)
+        const typePills = el.querySelectorAll('.sched-type-pill[data-type]');
         const typeInput = el.querySelector('input[name="type"]');
         typePills.forEach(p => p.addEventListener('click', () => {
           typePills.forEach(x => x.classList.toggle('active', x === p));
           typeInput.value = p.dataset.type;
+        }));
+        // duration pill 단일 선택
+        const durPills = el.querySelectorAll('#schedTplDurPills .sched-type-pill[data-dur]');
+        const durInput = el.querySelector('input[name="duration_min"]');
+        durPills.forEach(p => p.addEventListener('click', () => {
+          durPills.forEach(x => x.classList.toggle('active', x === p));
+          durInput.value = p.dataset.dur;
         }));
         // dow pill 다중 토글
         const dowPills = el.querySelectorAll('#schedTplDowPills .sched-type-pill[data-dow]');
@@ -588,14 +623,14 @@ const PromoTab = (() => {
     const payload = {
       title: (fd.get('title') || '').trim(),
       type:  fd.get('type') || '업무',
-      start_time: fd.get('start_time') || null,
-      end_time:   fd.get('end_time') || null,
+      duration_min: Math.max(5, parseInt(fd.get('duration_min'), 10) || 30),
+      start_time: null,   // v14: 템플릿은 시각 미지정 — 생성 시점에 부여
+      end_time:   null,
       notes: (fd.get('notes') || '').trim() || null,
       days_of_week: dowList,
       is_active: !!fd.get('is_active')
     };
     if (!payload.title) { Toast.error('제목은 필수'); return; }
-    if (!payload.start_time) { Toast.error('시작 시각은 필수'); return; }
     try {
       if (editId) {
         const { error } = await supabase.from('schedule_templates').update(payload).eq('id', editId);
@@ -614,6 +649,8 @@ const PromoTab = (() => {
   }
 
   // 오늘 날짜에 맞는 고정일정 일괄 생성 (요일 필터 적용, 중복 방지)
+  // v14: 템플릿은 duration_min 만 가짐 → 사용자에게 시작시각 하나만 묻고
+  //      활성 템플릿을 제목순으로 이어 붙여(cascade) 배치. 이후 개별 편집 가능.
   async function handleGenerateTodaySchedTemplates() {
     const now = new Date();
     const todayYMD = toYMD(now);
@@ -622,7 +659,8 @@ const PromoTab = (() => {
     const { data: tpls, error: e1 } = await supabase
       .from('schedule_templates')
       .select('*')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('title');
     if (e1) { Toast.error('템플릿 조회 실패: ' + e1.message); return; }
     const activeTpls = (tpls || []).filter(t => !t.days_of_week || !t.days_of_week.length || t.days_of_week.includes(dow));
     if (!activeTpls.length) {
@@ -639,13 +677,35 @@ const PromoTab = (() => {
     if (e2) { Toast.error('기존 일정 조회 실패: ' + e2.message); return; }
     const existingIds = new Set((existing || []).map(r => r.template_id));
 
-    const toInsert = activeTpls
-      .filter(t => !existingIds.has(t.id))
-      .map(t => ({
+    const toGenerate = activeTpls.filter(t => !existingIds.has(t.id));
+    if (!toGenerate.length) {
+      Toast.info('오늘 고정일정은 이미 모두 생성되어 있습니다.');
+      return;
+    }
+
+    // 시작시각 입력 받기 (기본 09:00). 이후 cascade.
+    const startStr = prompt(
+      `오늘 생성할 고정일정 ${toGenerate.length}건의 시작 시각을 입력하세요 (HH:MM)\n` +
+      `제목순으로 이어 붙여 배치됩니다. 생성 후 개별 편집 가능.`,
+      '09:00'
+    );
+    if (startStr === null) return;  // 취소
+    if (!/^\d{1,2}:\d{2}$/.test(startStr.trim())) {
+      Toast.error('시작 시각 형식이 올바르지 않습니다 (예: 09:00)');
+      return;
+    }
+    let cursor = startStr.trim().padStart(5, '0');
+
+    const toInsert = toGenerate.map(t => {
+      const dur = Number(t.duration_min) || 30;
+      const st  = cursor;
+      const et  = addMinutesHHMM(st, dur);
+      cursor = et;
+      return {
         staff_id:     null,
         sched_date:   todayYMD,
-        start_time:   t.start_time,
-        end_time:     t.end_time,
+        start_time:   st,
+        end_time:     et,
         type:         t.type || '업무',
         title:        t.title,
         notes:        t.notes,
@@ -653,16 +713,12 @@ const PromoTab = (() => {
         status:       'active',
         template_id:  t.id,
         template_date: todayYMD
-      }));
-
-    if (!toInsert.length) {
-      Toast.info('오늘 고정일정은 이미 모두 생성되어 있습니다.');
-      return;
-    }
+      };
+    });
 
     const { error: e3 } = await supabase.from('staff_schedules').insert(toInsert);
     if (e3) { Toast.error('일괄 생성 실패: ' + e3.message); return; }
-    Toast.success(`${toInsert.length}건 생성되었습니다`);
+    Toast.success(`${toInsert.length}건 생성 (${toInsert[0].start_time}~${toInsert[toInsert.length-1].end_time})`);
     loadScheduleView();
   }
 
@@ -1119,14 +1175,14 @@ const PromoTab = (() => {
   async function loadScheduleTemplatesForPicker(selectEl) {
     const { data, error } = await supabase
       .from('schedule_templates')
-      .select('id, title, type, start_time, end_time, days_of_week')
+      .select('id, title, type, duration_min, days_of_week')
       .eq('is_active', true)
-      .order('start_time').order('title');
+      .order('title');
     if (error) { console.error('sched template picker load failed:', error); return; }
     const opts = (data || []).map(t => {
-      const time = `${String(t.start_time || '').slice(0,5)}${t.end_time ? '–' + String(t.end_time).slice(0,5) : ''}`;
+      const dur = durationLabel(t.duration_min);
       const dow = (!t.days_of_week || !t.days_of_week.length) ? '매일' : t.days_of_week.map(d => DOW_LABELS[d]).join('·');
-      return `<option value="${t.id}">${esc(`[${t.type}] ${t.title} · ${time} · ${dow}`)}</option>`;
+      return `<option value="${t.id}">${esc(`[${t.type}] ${t.title} · ${dur} · ${dow}`)}</option>`;
     }).join('');
     selectEl.innerHTML = `<option value="">— 선택 —</option>` + opts;
   }
@@ -1147,15 +1203,19 @@ const PromoTab = (() => {
       p.classList.toggle('active', p.dataset.type === tpl.type);
     });
 
+    // v14: 템플릿에는 시작시각이 없음. 폼의 현재 start_time 을 기준으로
+    //       end_time = start + duration_min 으로 자동 계산.
     const startInp = formEl.querySelector('input[name="start_time"]');
     const endInp   = formEl.querySelector('input[name="end_time"]');
-    if (startInp && tpl.start_time) startInp.value = String(tpl.start_time).slice(0,5);
-    if (endInp)                    endInp.value   = tpl.end_time ? String(tpl.end_time).slice(0,5) : '';
+    const dur = Number(tpl.duration_min) || 30;
+    if (startInp && endInp && startInp.value) {
+      endInp.value = addMinutesHHMM(startInp.value, dur);
+    }
 
     const notesInp = formEl.querySelector('textarea[name="notes"]');
     if (notesInp) notesInp.value = tpl.notes || '';
 
-    Toast.success(`"${tpl.title}" 템플릿을 적용했습니다`);
+    Toast.success(`"${tpl.title}" 템플릿 적용 (${durationLabel(dur)})`);
   }
 
   // 미완료 task_items 옵션 로드 — PromoCalendarTab.fetchOpenTaskItems 재사용
