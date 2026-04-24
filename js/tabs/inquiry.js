@@ -737,6 +737,13 @@ const InquiryTab = (() => {
 
     // v7: 등록 동시 진행이면 registrations INSERT
     if (isRegistered && newInquiryId) {
+      // SPT 횟수: 빈 값 / 비숫자는 null. 0 허용.
+      const sptCountRaw = fd.get('spt_count');
+      const sptCount = (sptCountRaw === '' || sptCountRaw == null)
+        ? null
+        : (Number.isFinite(parseInt(sptCountRaw)) ? parseInt(sptCountRaw) : null);
+      const sptTime = fd.get('spt_preferred_time')?.trim() || null;
+
       const regPayload = {
         inquiry_id: newInquiryId,
         registered_date: fd.get('registered_date') || new Date().toISOString().slice(0, 10),
@@ -747,6 +754,9 @@ const InquiryTab = (() => {
         // v7.1: 추가 모드에서는 등록 섹션의 reg_contract_manager / reg_sales_manager 사용
         contract_manager: fd.get('reg_contract_manager')?.trim() || null,
         sales_manager: fd.get('reg_sales_manager')?.trim() || null,
+        // v26: SPT 필드 누락 fix — 문의추가+등록 동시진행 시 spt_count/spt_preferred_time 저장
+        spt_count: sptCount,
+        spt_preferred_time: sptTime,
       };
       const { error: regError } = await supabase.from('registrations').insert(regPayload);
       if (regError) {
