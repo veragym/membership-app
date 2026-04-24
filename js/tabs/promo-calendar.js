@@ -22,14 +22,29 @@
 const PromoCalendarTab = (() => {
 
   // ═══ 상수 ═══════════════════════════════════════════════════════════
-  const CATEGORIES = ['홍보', '이벤트', '발주', '유지보수', '기타'];
-  const CATEGORY_COLORS = {
-    '홍보':     '#EC4899',
-    '이벤트':   '#F59E0B',
-    '발주':     '#10B981',
-    '유지보수': '#3B82F6',
-    '기타':     '#6B7280'
+  // v12: 카테고리/색상은 설정 > 업무카테고리 드롭다운에서 관리. DB 로드.
+  const FALLBACK_COLOR = '#6B7280';
+  let CATEGORIES = ['홍보', '이벤트', '발주', '유지보수', '기타'];      // DB 로드 전 fallback
+  let CATEGORY_COLORS = {
+    '홍보': '#EC4899', '이벤트': '#F59E0B', '발주': '#10B981',
+    '유지보수': '#3B82F6', '기타': '#6B7280'
   };
+  let _categoriesLoaded = false;
+
+  async function loadTaskCategories() {
+    try {
+      const rows = await Dropdown.fetchFull('업무카테고리');
+      if (rows && rows.length) {
+        CATEGORIES = rows.map(r => r.value);
+        CATEGORY_COLORS = {};
+        rows.forEach(r => { CATEGORY_COLORS[r.value] = r.color || FALLBACK_COLOR; });
+      }
+      _categoriesLoaded = true;
+    } catch (e) {
+      console.warn('[promo-calendar] 업무카테고리 로드 실패:', e);
+    }
+  }
+
   const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
   const FILTER_LABELS = { all: '전체', week: '이번주', today: '오늘' };
 
@@ -71,12 +86,14 @@ const PromoCalendarTab = (() => {
   function tmpId() { return 'tmp_' + Math.random().toString(36).slice(2, 11); }
 
   // ═══ ENTRY ══════════════════════════════════════════════════════════
-  function render(container) {
+  async function render(container) {
     hostContainer = container;
     if (!viewMonth) {
       const now = new Date();
       viewMonth = { y: now.getFullYear(), m: now.getMonth() + 1 };
     }
+    // v12: 업무 카테고리 로드 (첫 진입 시)
+    if (!_categoriesLoaded) await loadTaskCategories();
     // 탭 진입 시 항상 모두 접힌 상태로 시작
     poolInitialCollapse = true;
     collapsedGroups = new Set();

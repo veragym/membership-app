@@ -23,7 +23,12 @@ const SettingsTab = (() => {
     { key: '회원권상품',   desc: 'FC 등록상품 (1개월/3개월/...)' },
     { key: 'PT상품',       desc: 'PT 등록 패키지 (PT10회/PT20회/...)' },
     { key: '매출담당자',   desc: '매출 담당 직원' },
+    { key: '업무카테고리', desc: '업무관리 카테고리 (색상 지정 가능)' },
   ];
+
+  // 색상 필수 카테고리 — 추가/수정 폼에 color picker 노출
+  const COLOR_ENABLED = new Set(['업무카테고리']);
+  const DEFAULT_COLOR = '#6B7280';
 
   let activeCategory = '구분';
   let currentOptions = [];  // 현재 카테고리의 옵션 리스트
@@ -108,7 +113,7 @@ const SettingsTab = (() => {
 
     const { data, error } = await supabase
       .from('dropdown_options')
-      .select('id, value, sort_order, is_active')
+      .select('id, value, sort_order, is_active, color')
       .eq('category', category)
       .order('is_active', { ascending: false })  // 활성 먼저
       .order('sort_order', { ascending: true });
@@ -274,9 +279,17 @@ const SettingsTab = (() => {
       ? `<span class="opt-usage-badge" title="실제 등록 건수">${opt.usage_count}건</span>`
       : '';
 
+    // 색상 스와치 (업무카테고리 등 COLOR_ENABLED 카테고리)
+    const showColor = COLOR_ENABLED.has(activeCategory);
+    const swatchColor = opt.color || DEFAULT_COLOR;
+    const swatch = showColor
+      ? `<span class="opt-color-swatch" style="background:${escapeHtml(swatchColor)}" title="${escapeHtml(swatchColor)}"></span>`
+      : '';
+
     return `
       <div class="settings-option-item ${inactive ? 'inactive' : ''}" data-id="${opt.id}">
         <div class="opt-order">${opt.sort_order}</div>
+        ${swatch}
         <div class="opt-value">${escapeHtml(opt.value)}${usageBadge}</div>
         <div class="opt-actions">
           ${!inactive ? `
@@ -310,6 +323,13 @@ const SettingsTab = (() => {
   // ─── CRUD 작업 ───────────────────────────────────────────────
 
   function openAddForm() {
+    const showColor = COLOR_ENABLED.has(activeCategory);
+    const colorField = showColor ? `
+      <div class="form-group">
+        <label>색상</label>
+        <input type="color" name="color" value="${DEFAULT_COLOR}">
+      </div>
+    ` : '';
     Modal.open({
       type: 'center',
       title: `${activeCategory} — 옵션 추가`,
@@ -320,6 +340,7 @@ const SettingsTab = (() => {
             <label>옵션 값 *</label>
             <input type="text" name="value" placeholder="예: 1개월" required autofocus>
           </div>
+          ${colorField}
           <div class="form-actions">
             <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
             <button type="submit" class="btn btn-primary">추가</button>
@@ -329,24 +350,29 @@ const SettingsTab = (() => {
       onOpen: (el) => {
         el.querySelector('#add-option-form').addEventListener('submit', async (e) => {
           e.preventDefault();
-          const value = new FormData(e.target).get('value').trim();
+          const fd = new FormData(e.target);
+          const value = fd.get('value').trim();
           if (!value) { Toast.warning('옵션 값을 입력해주세요.'); return; }
-          await addOption(value);
+          const color = showColor ? fd.get('color') : null;
+          await addOption(value, color);
         });
       }
     });
   }
 
-  async function addOption(value) {
+  async function addOption(value, color) {
     // 다음 sort_order = 현재 활성 옵션의 max + 1
     const activeOpts = currentOptions.filter(o => o.is_active);
     const nextOrder = activeOpts.length > 0
       ? Math.max(...activeOpts.map(o => o.sort_order)) + 1
       : 1;
 
+    const row = { category: activeCategory, value, sort_order: nextOrder, is_active: true };
+    if (color) row.color = color;
+
     const { error } = await supabase
       .from('dropdown_options')
-      .insert({ category: activeCategory, value, sort_order: nextOrder, is_active: true });
+      .insert(row);
 
     if (error) {
       if (error.code === '23505') {
@@ -364,6 +390,14 @@ const SettingsTab = (() => {
   }
 
   function openEditForm(opt) {
+    const showColor = COLOR_ENABLED.has(activeCategory);
+    const curColor = opt.color || DEFAULT_COLOR;
+    const colorField = showColor ? `
+      <div class="form-group">
+        <label>색상</label>
+        <input type="color" name="color" value="${escapeHtml(curColor)}">
+      </div>
+    ` : '';
     Modal.open({
       type: 'center',
       title: `${activeCategory} — 옵션 수정`,
@@ -374,6 +408,7 @@ const SettingsTab = (() => {
             <label>옵션 값 *</label>
             <input type="text" name="value" value="${escapeHtml(opt.value)}" required autofocus>
           </div>
+          ${colorField}
           <p class="form-hint">
             * 기존에 이 값으로 저장된 레코드(registrations/inquiries 등)에는 영향이 없습니다.<br>
             * 과거 데이터와 일관성 유지를 위해 오타 수정 외에는 가급적 새 옵션을 추가하세요.
@@ -387,19 +422,27 @@ const SettingsTab = (() => {
       onOpen: (el) => {
         el.querySelector('#edit-option-form').addEventListener('submit', async (e) => {
           e.preventDefault();
-          const newValue = new FormData(e.target).get('value').trim();
+          const fd = new FormData(e.target);
+          const newValue = fd.get('value').trim();
           if (!newValue) { Toast.warning('옵션 값을 입력해주세요.'); return; }
-          if (newValue === opt.value) { Modal.close(); return; }
-          await updateOption(opt.id, newValue);
+          const newColor = showColor ? fd.get('color') : null;
+          const valueChanged = newValue !== opt.value;
+          const colorChanged = showColor && newColor !== curColor;
+          if (!valueChanged && !colorChanged) { Modal.close(); return; }
+          await updateOption(opt.id, newValue, newColor, valueChanged, colorChanged);
         });
       }
     });
   }
 
-  async function updateOption(id, newValue) {
+  async function updateOption(id, newValue, newColor, valueChanged, colorChanged) {
+    const patch = {};
+    if (valueChanged) patch.value = newValue;
+    if (colorChanged) patch.color = newColor;
+
     const { error } = await supabase
       .from('dropdown_options')
-      .update({ value: newValue })
+      .update(patch)
       .eq('id', id);
 
     if (error) {

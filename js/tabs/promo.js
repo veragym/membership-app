@@ -199,10 +199,19 @@ const PromoTab = (() => {
 
   // ═══ 금일 업무 (업무계획 탭에서 등록된 Task 중 오늘이 기간에 포함된 것) ═══
   // 데이터 모델: tasks(id, title, category, start_date, end_date, status) + task_items(id, task_id, order_index, content, is_done)
-  const TODAY_TASK_CATEGORY_COLORS = {
-    '홍보': '#EC4899', '이벤트': '#F59E0B', '발주': '#10B981',
-    '유지보수': '#3B82F6', '기타': '#6B7280'
-  };
+  // v12: 카테고리 색상은 설정 > 업무카테고리 드롭다운에서 관리. 하드코딩 제거.
+  const FALLBACK_TASK_COLOR = '#6B7280';
+  let TODAY_TASK_CATEGORY_COLORS = {}; // DB에서 로드됨
+
+  async function loadTaskCategoryColors() {
+    try {
+      const rows = await Dropdown.fetchFull('업무카테고리');
+      TODAY_TASK_CATEGORY_COLORS = {};
+      rows.forEach(r => { TODAY_TASK_CATEGORY_COLORS[r.value] = r.color || FALLBACK_TASK_COLOR; });
+    } catch (e) {
+      console.warn('[promo] 업무카테고리 로드 실패:', e);
+    }
+  }
   // 'YYYY-MM-DD' → 'M/D'
   function shortYMD(ymd) {
     if (!ymd) return '';
@@ -215,6 +224,9 @@ const PromoTab = (() => {
     const body = document.getElementById('opsTodayTasks');
     if (!body) return;
     const todayYMD = toYMD(new Date());
+
+    // 업무 카테고리 색상 로드 (첫 호출 시 DB 조회, 이후 캐시)
+    await loadTaskCategoryColors();
 
     const { data, error } = await supabase
       .from('task_items')
@@ -269,7 +281,7 @@ const PromoTab = (() => {
 
     body.innerHTML = groups.map(g => {
       const t = g.task;
-      const color = TODAY_TASK_CATEGORY_COLORS[t.category] || TODAY_TASK_CATEGORY_COLORS['기타'];
+      const color = TODAY_TASK_CATEGORY_COLORS[t.category] || TODAY_TASK_CATEGORY_COLORS['기타'] || FALLBACK_TASK_COLOR;
       const pct = g.total > 0 ? Math.round((g.done / g.total) * 100) : 0;
       const completeCls = g.isComplete ? 'is-complete' : '';
       const completeBadge = g.isComplete ? `<span class="plan-pool-done-badge">완료</span>` : '';

@@ -12,15 +12,17 @@
  *   });
  */
 const Dropdown = (() => {
-  // 카테고리별 옵션 캐시
+  // 카테고리별 옵션 캐시 (값 배열)
   const cache = {};
+  // 전체 필드 캐시 ({value, color, sort_order} 배열) — 업무카테고리 등 색상 필요한 곳용
+  const fullCache = {};
 
   async function fetchOptions(category) {
     if (cache[category]) return cache[category];
 
     const { data, error } = await supabase
       .from('dropdown_options')
-      .select('value, sort_order')
+      .select('value, sort_order, color')
       .eq('category', category)
       .eq('is_active', true)
       .order('sort_order');
@@ -30,13 +32,20 @@ const Dropdown = (() => {
       return [];
     }
 
-    cache[category] = data.map(d => d.value);
+    cache[category]     = data.map(d => d.value);
+    fullCache[category] = data.map(d => ({ value: d.value, color: d.color, sort_order: d.sort_order }));
     return cache[category];
   }
 
+  // 색상 등 전체 필드가 필요한 경우 (ex. 업무카테고리)
+  async function fetchFull(category) {
+    if (!fullCache[category]) await fetchOptions(category);
+    return fullCache[category] || [];
+  }
+
   function clearCache(category) {
-    if (category) delete cache[category];
-    else Object.keys(cache).forEach(k => delete cache[k]);
+    if (category) { delete cache[category]; delete fullCache[category]; }
+    else { Object.keys(cache).forEach(k => delete cache[k]); Object.keys(fullCache).forEach(k => delete fullCache[k]); }
   }
 
   async function create(opts) {
@@ -169,5 +178,5 @@ const Dropdown = (() => {
     return { select, getValue: () => hiddenInput.value, wrapper, dispose: () => document.removeEventListener('click', onDocClick) };
   }
 
-  return { create, fetchOptions, clearCache };
+  return { create, fetchOptions, fetchFull, clearCache };
 })();

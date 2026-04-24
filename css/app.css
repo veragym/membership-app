@@ -1948,6 +1948,16 @@ html, body {
   gap: 8px;
 }
 
+.opt-color-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+
 /* 인기순 카테고리: 사용 건수 배지 */
 .opt-usage-badge {
   display: inline-flex;
