@@ -651,21 +651,30 @@ const PromoCalendarTab = (() => {
           if (error) throw error;
         }
       }
-      // 2) upsert (순서 재할당 0..n-1)
+      // 2) insert/update 분리 — PostgREST가 id 있는 행/없는 행을 혼용하면
+      //    없는 행에 id:null이 주입되어 DEFAULT gen_random_uuid()가 무시됨.
       if (cleanItems.length) {
-        const rows = cleanItems.map((it, idx) => {
-          const isNew = String(it.id).startsWith('tmp_');
-          const row = {
+        const newRows = [];
+        const updRows = [];
+        cleanItems.forEach((it, idx) => {
+          const isNew = !it.id || String(it.id).startsWith('tmp_');
+          const base = {
             task_id: taskId,
             content: it.content,
             order_index: idx,
             is_done: !!it.is_done
           };
-          if (!isNew) row.id = it.id;
-          return row;
+          if (isNew) newRows.push(base);
+          else       updRows.push({ id: it.id, ...base });
         });
-        const { error } = await supabase.from('task_items').upsert(rows);
-        if (error) throw error;
+        if (newRows.length) {
+          const { error } = await supabase.from('task_items').insert(newRows);
+          if (error) throw error;
+        }
+        if (updRows.length) {
+          const { error } = await supabase.from('task_items').upsert(updRows);
+          if (error) throw error;
+        }
       }
 
       Toast.success(editId ? '수정되었습니다' : '등록되었습니다');
@@ -894,14 +903,25 @@ const PromoCalendarTab = (() => {
         }
       }
       if (cleanItems.length) {
-        const rows = cleanItems.map((it, idx) => {
-          const isNew = String(it.id).startsWith('tmp_');
-          const row = { template_id: tplId, content: it.content, order_index: idx };
-          if (!isNew) row.id = it.id;
-          return row;
+        // PostgREST 제약: 단일 배열에 id 있는 행 + id 없는 행을 섞으면
+        // 없는 행에 id:null이 주입돼 DEFAULT gen_random_uuid()가 무시됨.
+        // → 신규(insert) / 기존(update) 분리 호출.
+        const newRows = [];
+        const updRows = [];
+        cleanItems.forEach((it, idx) => {
+          const isNew = !it.id || String(it.id).startsWith('tmp_');
+          const base = { template_id: tplId, content: it.content, order_index: idx };
+          if (isNew) newRows.push(base);
+          else       updRows.push({ id: it.id, ...base });
         });
-        const { error } = await supabase.from('task_template_items').upsert(rows);
-        if (error) throw error;
+        if (newRows.length) {
+          const { error } = await supabase.from('task_template_items').insert(newRows);
+          if (error) throw error;
+        }
+        if (updRows.length) {
+          const { error } = await supabase.from('task_template_items').upsert(updRows);
+          if (error) throw error;
+        }
       }
 
       Toast.success(editId ? '수정되었습니다' : '등록되었습니다');
