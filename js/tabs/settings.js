@@ -29,11 +29,22 @@ const SettingsTab = (() => {
   let currentOptions = [];  // 현재 카테고리의 옵션 리스트
 
   // 인기순 자동정렬 카테고리 → 실제 사용 레코드 소스 매핑
-  // 카테고리 선택 시 사용 횟수를 집계 → 인기순으로 sort_order 일괄 갱신
+  // match: 'exact'   → 드롭다운 value == DB 컬럼값 (문자열 동일)
+  // match: 'ptCount' → 드롭다운 value 에서 "\d+회" 정수 추출 → pt_count 와 비교
+  //   (pt_registrations.product 가 v7 이후 NULL 이라 pt_count 로 집계해야 함)
   const POPULARITY_SOURCES = {
-    '회원권상품': { table: 'registrations',    column: 'product' },
-    'PT상품':    { table: 'pt_registrations', column: 'product' },
+    '회원권상품': { table: 'registrations',    column: 'product',  match: 'exact'   },
+    'PT상품':    { table: 'pt_registrations', column: 'pt_count', match: 'ptCount' },
   };
+
+  // 드롭다운 value → 집계 키 변환 ("PT12회" → 12)
+  function valueToKey(value, match) {
+    if (match === 'ptCount') {
+      const m = String(value).match(/(\d+)/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    return value;  // 'exact'
+  }
 
   async function init() {
     // admin 아니면 접근 차단 (이중 안전장치 — tab-btn이 display:none이지만 직접 호출 가능성)
@@ -138,17 +149,18 @@ const SettingsTab = (() => {
       return;  // fallback: 기존 sort_order 그대로
     }
 
-    // value → count 집계
+    // DB 컬럼값 → count 집계 (key 타입은 match 방식에 따라 string/number)
     const counts = new Map();
     (usage || []).forEach(r => {
       const v = r[src.column];
-      if (!v) return;
+      if (v === null || v === undefined || v === '') return;
       counts.set(v, (counts.get(v) || 0) + 1);
     });
 
-    // 각 옵션에 usage_count 주입
+    // 각 옵션에 usage_count 주입 (value → key 변환 후 매칭)
     currentOptions.forEach(o => {
-      o.usage_count = counts.get(o.value) || 0;
+      const key = valueToKey(o.value, src.match);
+      o.usage_count = (key !== null && counts.get(key)) || 0;
     });
 
     // 활성 옵션만 인기순 재배치
