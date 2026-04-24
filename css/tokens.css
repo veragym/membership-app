@@ -24,11 +24,21 @@
   --color-text-muted: #999999;
   --color-text-on-primary: #FFFFFF;
 
-  /* ── Semantic ── */
+  /* ── Semantic (base) ── */
   --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
   --color-info: #3B82F6;
+
+  /* ── Semantic (bg / dark pair) ── */
+  --color-success-bg: #D1FAE5;
+  --color-success-dark: #065F46;
+  --color-warning-bg: #FEF3C7;
+  --color-warning-dark: #92400E;
+  --color-danger-bg: #FEE2E2;
+  --color-danger-dark: #991B1B;
+  --color-info-bg: #DBEAFE;
+  --color-info-dark: #1E40AF;
 
   /* ── Radius (iOS) ── */
   --radius-xs: 6px;
@@ -44,7 +54,29 @@
   --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
   --shadow-modal: 0 20px 60px rgba(255,107,53,0.15);
 
-  /* ── Spacing & sizing ── */
+  /* ── Button heights (3-tier) ── */
+  --btn-height-lg: 44px;  /* 로그인, 메인 submit, 풀폭 CTA */
+  --btn-height-md: 32px;  /* 일반 액션 (기본) */
+  --btn-height-sm: 28px;  /* 컴팩트 (태그, 인라인) */
+
+  /* ── Spacing (4px grid) ── */
+  --space-micro: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* ── Typography ── */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-form: 14px;   /* 폼 인풋 통일 */
+  --font-size-body: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+
+  /* ── Touch & family ── */
   --touch-min: 44px;
   --font-family: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
 }
