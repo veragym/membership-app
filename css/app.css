@@ -3994,10 +3994,14 @@ html, body {
   background: var(--color-bg-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  padding: 0 12px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
   color: var(--color-text-primary);
   transition: background .12s;
 }
@@ -4005,11 +4009,15 @@ html, body {
 .plan-btn-primary {
   background: var(--color-primary);
   color: var(--color-text-on-primary);
-  border: none;
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-sm);
-  padding: 8px 14px;
+  padding: 0 14px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   transition: background .12s;
 }
@@ -4177,7 +4185,7 @@ html, body {
 .plan-pool-group:last-child { border-bottom: none; }
 .plan-pool-group-hdr {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   padding: 8px 10px 8px 4px;
   background: var(--color-bg-2);
