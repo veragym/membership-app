@@ -1506,50 +1506,26 @@ const PromoTab = (() => {
     if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   }
 
-  // ───────── 홍보관리 (2단계 서브탭: 캠페인 / 플레이스) ─────────
-  let activePromoSub = 'campaign';
-
+  // ───────── 홍보관리 (세로 섹션 스택) ─────────
+  // v13: [캠페인/플레이스] 서브탭 제거, 각 섹션 세로로 전체폭 나열.
   function renderPromo(container) {
     container.innerHTML = `
-      <div class="promo-sub-bar">
-        <button type="button" class="promo-sub-btn ${activePromoSub === 'campaign' ? 'active' : ''}" data-sub="campaign">캠페인</button>
-        <button type="button" class="promo-sub-btn ${activePromoSub === 'place' ? 'active' : ''}" data-sub="place">플레이스</button>
+      <div class="promo-stack">
+        <section class="promo-section" id="promo-sec-place"></section>
+        <section class="promo-section promo-section-placeholder">
+          <div class="promo-placeholder-body">앞으로 구축할 홍보관리 내용</div>
+        </section>
+        <section class="promo-section promo-section-placeholder">
+          <div class="promo-placeholder-body">앞으로 구축할 홍보관리 내용</div>
+        </section>
       </div>
-      <div id="promo-sub-content"></div>
     `;
-    container.querySelectorAll('.promo-sub-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activePromoSub = btn.dataset.sub;
-        container.querySelectorAll('.promo-sub-btn').forEach(b => b.classList.toggle('active', b === btn));
-        loadPromoSub(activePromoSub);
-      });
-    });
-    loadPromoSub(activePromoSub);
-  }
-
-  function loadPromoSub(sub) {
-    const c = document.getElementById('promo-sub-content');
-    if (!c) return;
-    if (sub === 'campaign') renderPromoCampaigns(c);
-    else if (sub === 'place') {
-      if (typeof PromoPlaceTab !== 'undefined' && PromoPlaceTab.render) {
-        PromoPlaceTab.render(c);
-      } else {
-        c.innerHTML = `<div class="ops-placeholder">플레이스 모듈 로드 실패 — 새로고침 후 재시도</div>`;
-      }
+    const placeHost = container.querySelector('#promo-sec-place');
+    if (typeof PromoPlaceTab !== 'undefined' && PromoPlaceTab.render) {
+      PromoPlaceTab.render(placeHost);
+    } else {
+      placeHost.innerHTML = `<div class="ops-placeholder">플레이스 모듈 로드 실패 — 새로고침 후 재시도</div>`;
     }
-  }
-
-  // 기존 캠페인 placeholder 카드 — 레이아웃/텍스트 모두 원본 그대로 유지
-  function renderPromoCampaigns(container) {
-    container.innerHTML = `
-      <div class="stats-grid">
-        <div class="stats-card"><div class="stats-card-icon">📢</div><h4>홍보 캠페인 관리</h4><p>전단지, 온라인 광고, 제휴업체 등 캠페인별 등록 및 집행 현황</p></div>
-        <div class="stats-card"><div class="stats-card-icon">📍</div><h4>지역별 홍보 효과</h4><p>거주지 데이터와 유입경로를 교차하여 지역별 홍보 효과 분석</p></div>
-        <div class="stats-card"><div class="stats-card-icon">💸</div><h4>홍보 비용 대비 성과</h4><p>캠페인별 투입 비용 대비 문의 건수 및 전환율(ROI) 추적</p></div>
-        <div class="stats-card"><div class="stats-card-icon">📋</div><h4>전단지 배포 기록</h4><p>배포 일자, 장소, 수량, 반응률 기록 및 이력 관리</p></div>
-      </div>
-    `;
   }
   function renderCenter(container) { container.innerHTML = `<div class="ops-placeholder">센터관리 — 준비 중</div>`; }
   function renderManual(container) { container.innerHTML = `<div class="ops-placeholder">메뉴얼생성 — 준비 중</div>`; }

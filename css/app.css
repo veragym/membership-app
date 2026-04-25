@@ -3649,34 +3649,32 @@ html, body {
 
 
 /* ══════════════════════════════════════════════════
-   홍보관리 → 2단계 서브탭 (캠페인 / 플레이스)
+   홍보관리 → 세로 섹션 스택 (v13: 서브탭 제거)
    ══════════════════════════════════════════════════ */
-.promo-sub-bar {
+.promo-stack {
   display: flex;
-  gap: 6px;
-  padding: 6px;
-  margin-bottom: 16px;
-  background: var(--color-bg-0);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  width: fit-content;
+  flex-direction: column;
+  gap: 20px;
 }
-.promo-sub-btn {
-  padding: 8px 18px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  border-radius: calc(var(--radius-sm) - 3px);
-  transition: all .15s;
-}
-.promo-sub-btn:hover { color: var(--color-text-primary); }
-.promo-sub-btn.active {
+.promo-section {
   background: var(--color-bg-1);
-  color: var(--color-primary);
-  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.promo-section-placeholder {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-0);
+  border-style: dashed;
+}
+.promo-placeholder-body {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* ══════════════════════════════════════════════════
