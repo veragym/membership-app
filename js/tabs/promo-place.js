@@ -211,12 +211,14 @@ const PromoPlaceTab = (() => {
       return;
     }
 
+    // 각 branch 섹션: 해당 branch에 데이터가 있는 키워드만 카드로 표시
     const renderSection = (branch) => {
-      const cards = keywords.map(k => {
+      const relevantKeywords = keywords.filter(k => !!(historyByKw[k.id] || {})[branch]);
+      if (relevantKeywords.length === 0) return '';
+      const cards = relevantKeywords.map(k => {
         const row = (historyByKw[k.id] || {})[branch];
-        const rowNull = (historyByKw[k.id] || {}).null; // branch 태깅 실패 케이스
-        const useRow = row || null;
-        return buildRankCard(k, useRow, branch, rowNull);
+        const rowNull = (historyByKw[k.id] || {}).null;
+        return buildRankCard(k, row, branch, rowNull);
       }).join('');
       return `
         <div class="place-rank-section">
@@ -228,7 +230,47 @@ const PromoPlaceTab = (() => {
       `;
     };
 
-    body.innerHTML = renderSection('misa');
+    // branch 태깅 실패(null) 섹션 — 기타 키워드
+    const renderOrphanSection = () => {
+      const orphans = keywords.filter(k => {
+        const hist = historyByKw[k.id] || {};
+        return !hist.misa && !hist.dongtan && hist.null;
+      });
+      if (orphans.length === 0) return '';
+      const cards = orphans.map(k => {
+        const row = (historyByKw[k.id] || {}).null;
+        return buildRankCard(k, row, 'null', null);
+      }).join('');
+      return `
+        <div class="place-rank-section">
+          <div class="place-rank-section-title" style="border-left-color:${BRANCH_COLOR.null}">
+            미분류
+          </div>
+          <div class="place-rank-grid">${cards}</div>
+        </div>
+      `;
+    };
+
+    // 미조회 키워드 섹션 — 아직 크롤 안 된 키워드
+    const renderUnknownSection = () => {
+      const unknowns = keywords.filter(k => !historyByKw[k.id]);
+      if (unknowns.length === 0) return '';
+      const cards = unknowns.map(k => buildRankCard(k, null, null, null)).join('');
+      return `
+        <div class="place-rank-section">
+          <div class="place-rank-section-title" style="border-left-color:#D1D5DB">
+            미조회
+          </div>
+          <div class="place-rank-grid">${cards}</div>
+        </div>
+      `;
+    };
+
+    body.innerHTML =
+      renderSection('misa') +
+      renderSection('dongtan') +
+      renderOrphanSection() +
+      renderUnknownSection();
   }
 
   function buildRankCard(kw, row, branch, rowNull) {
