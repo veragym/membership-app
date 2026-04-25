@@ -367,6 +367,8 @@ const PromoPlaceTab = (() => {
   }
 
   // ─── MANUAL TRIGGER ───
+  // v2: 트리거 이후 place_rank_history 에 새 레코드가 모두 도착할 때까지
+  //     5초 간격으로 스마트 폴링 → 완료 시 자동 리렌더 (수동 새로고침 불필요)
   async function triggerManualAll() {
     if (!keywords.length) { Toast.info('먼저 키워드를 추가해주세요.'); return; }
     const btn = document.getElementById('prManualBtn');
@@ -390,21 +392,63 @@ const PromoPlaceTab = (() => {
       if (!res.ok) {
         throw new Error(json.error || `HTTP ${res.status}`);
       }
-      Toast.success('크롤러 실행 요청됨 — 1분 이내 결과가 반영됩니다.');
-      // 자동 폴링: 30초 간격으로 3회 재조회
-      if (refreshTimer) clearInterval(refreshTimer);
-      let count = 0;
-      refreshTimer = setInterval(async () => {
-        count++;
-        await loadAll();
-        if (count >= 3) { clearInterval(refreshTimer); refreshTimer = null; }
-      }, 30000);
+
+      // 완료 감지 폴링 시작
+      const triggerTime = new Date().toISOString();
+      const expectedCount = keywords.filter(k => k.is_active !== false).length;
+      Toast.info(`크롤러 실행 중 (${expectedCount}개 키워드) — 완료 시 자동 반영됩니다`);
+      startResultPolling(btn, orig, triggerTime, expectedCount);
     } catch (e) {
       console.error('[place-rank] manual trigger failed', e);
       Toast.error('지금 조회 실패: ' + (e.message || e));
-    } finally {
       btn.disabled = false; btn.textContent = orig;
     }
+  }
+
+  // history 테이블에 triggerTime 이후 새 레코드가 모든 키워드만큼 들어오면 완료로 간주
+  function startResultPolling(btn, origText, triggerTime, expectedCount) {
+    if (refreshTimer) clearInterval(refreshTimer);
+    let pollCount = 0;
+    const MAX_POLL = 60;          // 5분 (5초 간격)
+    const POLL_INTERVAL = 5000;
+
+    btn.textContent = `조회 중… (0/${expectedCount})`;
+
+    refreshTimer = setInterval(async () => {
+      pollCount++;
+      try {
+        const { data: rows, error } = await supabase
+          .from('place_rank_history')
+          .select('keyword_id')
+          .gte('checked_at', triggerTime);
+
+        if (error) throw error;
+
+        const doneSet = new Set((rows || []).map(r => r.keyword_id));
+        const done = doneSet.size;
+        btn.textContent = `조회 중… (${done}/${expectedCount})`;
+
+        const allDone  = done >= expectedCount;
+        const timedOut = pollCount >= MAX_POLL;
+
+        // 중간에 진행된 만큼 먼저 반영 (10초마다 한 번씩 부분 갱신)
+        if (!allDone && !timedOut && pollCount % 2 === 0 && done > 0) {
+          await loadAll();
+        }
+
+        if (allDone || timedOut) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+          await loadAll();
+          btn.disabled = false;
+          btn.textContent = origText;
+          if (allDone) Toast.success('순위 갱신 완료');
+          else Toast.info('시간 초과 — 크롤러가 아직 실행 중일 수 있습니다. 잠시 후 다시 시도해주세요');
+        }
+      } catch (e) {
+        console.warn('[place-rank] polling error', e);
+      }
+    }, POLL_INTERVAL);
   }
 
   // 탭 전환 시 타이머 정리 (app.js가 직접 호출하진 않지만 방어적으로)
