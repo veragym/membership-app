@@ -28,6 +28,7 @@ import sys
 import json
 import random
 import asyncio
+import hashlib
 import traceback
 from urllib.parse import quote
 from datetime import datetime, timezone
@@ -47,7 +48,8 @@ except ImportError:
 
 TARGET_NAME = "베라짐"
 BRANCH_KEYWORDS = {"미사": "misa", "동탄": "dongtan"}
-MAX_PAGES = 5  # 통합검색 플레이스 박스 최대 페이지
+MAX_PAGES = 5         # 통합검색 플레이스 박스 최대 페이지
+MAX_SNAPSHOTS = 20    # 경쟁사 스냅샷 저장 상한 (DOM 순 1~20, 광고 포함)
 
 UA_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
@@ -131,6 +133,48 @@ def is_target_name(name: str) -> bool:
         return False
     n = name.lower().replace(' ', '').replace('-', '')
     return any(t in n for t in ['베라짐', 'veragym', 'vera짐'])
+
+
+async def fetch_image_hash(image_url: str) -> str | None:
+    """이미지 URL → bytes 다운로드 → MD5 해시.
+
+    실패 시 None 반환 (네트워크 오류, 이미지 없음, 차단 등).
+    Phase 1에서는 해시 저장만 (변경 감지용). Phase 2에서 비교.
+    """
+    if not image_url:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as c:
+            r = await c.get(image_url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; ImageFetch/1.0)",
+                "Referer": "https://search.naver.com/",
+            })
+            if r.status_code != 200 or not r.content:
+                return None
+            return hashlib.md5(r.content).hexdigest()
+    except Exception as e:
+        # 조용히 None — 해시 실패가 전체 크롤을 막으면 안 됨
+        return None
+
+
+async def insert_snapshots_bulk(rows: list[dict]):
+    """place_rank_snapshots bulk insert (httpx POST, 최대 500건 chunk)."""
+    if not rows:
+        return
+    CHUNK = 100
+    async with httpx.AsyncClient(timeout=30) as c:
+        for i in range(0, len(rows), CHUNK):
+            chunk = rows[i:i+CHUNK]
+            try:
+                r = await c.post(
+                    f"{SUPABASE_URL}/rest/v1/place_rank_snapshots",
+                    headers={**_headers(), "Prefer": "return=minimal"},
+                    json=chunk,
+                )
+                if r.status_code >= 400:
+                    print(f"[warn] snapshot bulk insert 실패: {r.status_code} {r.text[:200]}")
+            except Exception as e:
+                print(f"[warn] snapshot bulk insert 예외: {e}")
 
 
 # ─────────────────────────────────────
@@ -257,6 +301,32 @@ PLACE_EXTRACT_JS = """
     return '';
   };
 
+  // 대표 이미지 URL 추출 (img src 또는 background-image)
+  const getImageUrl = (el) => {
+    // 1) img 태그
+    const imgs = el.querySelectorAll('img');
+    for (const img of imgs) {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      if (src && /pstatic\\.net|ssl\\.pstatic|myplace|place/.test(src)) {
+        // data URI나 빈 src 제외
+        if (src.startsWith('http')) return src;
+      }
+    }
+    // 2) background-image (inline style)
+    const bgEls = el.querySelectorAll('[style*="background-image"]');
+    for (const be of bgEls) {
+      const style = be.getAttribute('style') || '';
+      const m = style.match(/background-image\\s*:\\s*url\\(['\"]?([^'\")]+)['\"]?\\)/);
+      if (m && m[1] && m[1].startsWith('http')) return m[1];
+    }
+    // 3) 첫 번째 img 무조건 (폴백)
+    if (imgs.length > 0) {
+      const src = imgs[0].getAttribute('src') || imgs[0].getAttribute('data-src') || '';
+      if (src && src.startsWith('http')) return src;
+    }
+    return '';
+  };
+
   for (const it of items) {
     const raw_text = (it.innerText || '').trim();
     if (raw_text.length < 5) continue;
@@ -264,10 +334,12 @@ PLACE_EXTRACT_JS = """
     if (!name) continue;
     const is_ad = isAdCard(it);
     const address = getAddress(it);
+    const image_url = getImageUrl(it);
     report.cards.push({
       name,
       address,
       is_ad,
+      image_url,
       raw: raw_text.replace(/\\n+/g, ' | ').slice(0, 180),
     });
   }
@@ -420,6 +492,8 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
 
     found_by_branch: dict[str | None, dict] = {}
     results_rows = []
+    snapshot_rows: list[dict] = []  # Phase 1: 경쟁사 상위 20개 저장
+    snapshot_timestamp = datetime.now(timezone.utc).isoformat()
 
     # 누적 통계 (디버그용)
     debug_stats = {
@@ -492,13 +566,39 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
                     addr = (c.get("address") or "")[:30]
                     print(f"    {idx+1:2d}. {nm}{tag} | {addr}")
 
-            # 광고 제외 + 누적 순위 매김
+            # 광고 제외 + 누적 순위 매김 + 스냅샷 수집 (DOM 순 1~20)
             for c in page_cards:
-                if c.get("is_ad"):
+                nm = (c.get("name") or "").strip()
+                addr = (c.get("address") or "").strip()
+                is_ad = bool(c.get("is_ad"))
+                img_url = (c.get("image_url") or "").strip()
+
+                # 스냅샷 index 확보 (nameless row는 snapshot 제외)
+                snap_idx = None
+                if nm and len(snapshot_rows) < MAX_SNAPSHOTS:
+                    snap_idx = len(snapshot_rows)
+                    snapshot_rows.append({
+                        "keyword_id": kw_row["id"],
+                        "snapshot_at": snapshot_timestamp,
+                        "dom_rank": snap_idx + 1,
+                        "organic_rank": None,  # 아래서 채움 (광고면 None 유지)
+                        "page": page_num,
+                        "is_ad": is_ad,
+                        "business_name": nm[:200],
+                        "address": addr[:300] if addr else None,
+                        "image_url": img_url[:500] if img_url else None,
+                        "image_hash": None,   # 뒤에서 채움
+                        "source": source,
+                    })
+
+                if is_ad:
                     continue
                 cumulative_rank += 1
-                nm = c.get("name") or ""
-                addr = c.get("address") or ""
+
+                # 광고 아닌 카드만 organic_rank 부여
+                if snap_idx is not None:
+                    snapshot_rows[snap_idx]["organic_rank"] = cumulative_rank
+
                 if len(debug_stats["collected_names"]) < 30:
                     debug_stats["collected_names"].append(f"{cumulative_rank}. {nm[:30]}")
                 if is_target_name(nm):
@@ -573,12 +673,26 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
     finally:
         await ctx.close()
 
+    # Phase 1: 이미지 해시 계산 (동시 실행, 실패해도 전체 크롤에 영향 없음)
+    if snapshot_rows:
+        print(f"[{keyword}] snapshot {len(snapshot_rows)}건 이미지 해시 계산 중...")
+        async def _hash(row):
+            row["image_hash"] = await fetch_image_hash(row.get("image_url"))
+        try:
+            await asyncio.gather(*[_hash(r) for r in snapshot_rows], return_exceptions=True)
+        except Exception as e:
+            print(f"[warn] {keyword} 이미지 해시 병렬 실패: {e}")
+
     if not dry_run:
         for row in results_rows:
             try:
                 await sb_insert("place_rank_history", row)
             except Exception as e:
                 print(f"[warn] insert 실패: {e}")
+        # Phase 1: 스냅샷 bulk insert
+        if snapshot_rows:
+            await insert_snapshots_bulk(snapshot_rows)
+            print(f"[{keyword}] snapshot {len(snapshot_rows)}건 저장 완료")
 
     return results_rows
 
