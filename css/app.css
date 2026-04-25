@@ -3678,6 +3678,128 @@ html, body {
 }
 
 /* ══════════════════════════════════════════════════
+   경쟁사 분석 (promo-competitors.js)
+   ══════════════════════════════════════════════════ */
+.competitors-root { display: flex; flex-direction: column; gap: 12px; }
+.competitors-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.competitors-title { font-size: 16px; font-weight: 700; margin: 0; }
+.competitors-controls { display: flex; align-items: center; gap: 10px; }
+.competitors-select {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-0);
+  font-size: 13px;
+  font-family: inherit;
+  min-width: 140px;
+}
+.competitors-updated { font-size: 12px; color: var(--color-text-muted); }
+
+.cmp-table-wrap { overflow-x: auto; }
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cmp-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--color-bg-0);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.cmp-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-divider);
+  vertical-align: middle;
+}
+.cmp-table tr.is-veragym td {
+  background: #FFF7ED;
+  font-weight: 600;
+}
+.cmp-dom {
+  font-family: ui-monospace, monospace;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.cmp-thumb-cell { width: 64px; }
+.cmp-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-0);
+}
+.cmp-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.cmp-name { font-weight: 500; }
+.cmp-addr {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.cmp-page {
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.cmp-ad-cell { text-align: center; }
+.cmp-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+}
+.cmp-badge-ad { background: #FEE2E2; color: #B91C1C; }
+.cmp-rank-num {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cmp-ads {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--color-bg-0);
+  border-radius: var(--radius-sm);
+}
+.cmp-ads-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text-primary);
+}
+.cmp-ads-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.cmp-ad-chip {
+  padding: 4px 10px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #991B1B;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+}
+.cmp-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════
    플레이스 순위 추적 (promo-place.js)
    ══════════════════════════════════════════════════ */
 .place-rank-root {

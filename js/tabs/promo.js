@@ -1512,9 +1512,7 @@ const PromoTab = (() => {
     container.innerHTML = `
       <div class="promo-stack">
         <section class="promo-section" id="promo-sec-place"></section>
-        <section class="promo-section promo-section-placeholder">
-          <div class="promo-placeholder-body">앞으로 구축할 홍보관리 내용</div>
-        </section>
+        <section class="promo-section" id="promo-sec-competitors"></section>
         <section class="promo-section promo-section-placeholder">
           <div class="promo-placeholder-body">앞으로 구축할 홍보관리 내용</div>
         </section>
@@ -1525,6 +1523,13 @@ const PromoTab = (() => {
       PromoPlaceTab.render(placeHost);
     } else {
       placeHost.innerHTML = `<div class="ops-placeholder">플레이스 모듈 로드 실패 — 새로고침 후 재시도</div>`;
+    }
+
+    const cmpHost = container.querySelector('#promo-sec-competitors');
+    if (typeof PromoCompetitorsTab !== 'undefined' && PromoCompetitorsTab.render) {
+      PromoCompetitorsTab.render(cmpHost);
+    } else {
+      cmpHost.innerHTML = `<div class="ops-placeholder">경쟁사 분석 모듈 로드 실패 — 새로고침 후 재시도</div>`;
     }
   }
   function renderCenter(container) { container.innerHTML = `<div class="ops-placeholder">센터관리 — 준비 중</div>`; }
