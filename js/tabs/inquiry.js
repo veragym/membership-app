@@ -319,6 +319,7 @@ const InquiryTab = (() => {
           <button class="btn-action btn-tm">TM</button>
           ${inq.status === 'unregistered' ? '<button class="btn-action btn-register">+등록</button>' : ''}
           ${inq.status === 'registered' ? '<button class="btn-action btn-pt">+PT</button>' : ''}
+          <button class="btn-action btn-sms">문자</button>
         </div>`;
 
     // 등록 정보 6셀 — 미등록이면 모두 "-"
@@ -368,6 +369,8 @@ const InquiryTab = (() => {
       if (ptBtn) ptBtn.addEventListener('click', () => {
         if (typeof PtTab !== 'undefined') PtTab.openPtForm({ name: inq.name, phone: inq.phone });
       });
+      const smsBtn = row.querySelector('.btn-sms');
+      if (smsBtn) smsBtn.addEventListener('click', () => openSmsModal(inq));
     }
 
     // 내용 셀 클릭 → 전체 내용 펼치기 토글 (과거 문의 행에도 적용)
@@ -389,6 +392,17 @@ const InquiryTab = (() => {
     }
 
     return row;
+  }
+
+  // ────────── 문자 발송 모달 (placeholder — Aligo API 연결 전) ──────────
+  function openSmsModal(inq) {
+    Toast.info('문자 발송 기능은 알리고 API 연결 후 활성화됩니다. (준비 중)');
+    // TODO: Aligo API 연결 후 모달로 교체:
+    // - 받는 사람: inq.name, inq.phone 자동 채움
+    // - 템플릿 선택 (sms_templates)
+    // - 메시지 입력 (변수 치환: {이름}, {전화번호})
+    // - 발송 → Edge Function send-sms 호출
+    // - 결과 → sms_logs 저장 + Toast
   }
 
   // ────────── 문의 추가 시 자동완성 (inquiries 테이블 — 읽기만) ──────────
