@@ -450,6 +450,16 @@ const InquiryTab = (() => {
       return;
     }
 
+    // SMS 일시 중지 플래그 확인 (Aligo 전환 작업 중)
+    try {
+      const { data: dis } = await supabase
+        .from('app_secrets').select('value').eq('key', 'SMS_DISABLED').maybeSingle();
+      if (dis?.value === '1') {
+        Toast.warning('🔴 SMS 발송 일시 중지 중입니다. (Aligo 전환 작업 중 — 내일 재활성화 예정)');
+        return;
+      }
+    } catch (e) { /* 조회 실패 시 진행 — Edge Function이 최종 차단 */ }
+
     const ctx = buildSmsContext(inq);
 
     // 템플릿 로드 (send_once 포함)

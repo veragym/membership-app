@@ -76,6 +76,16 @@ function bindPhoneFormat(input) {
 async function autoScheduleSmsForRegistration(record, triggerCategory, relatedTable) {
   if (!record || !record.id || !record.phone) return;
 
+  // SMS 기능 차단 플래그 (Aligo 전환 작업 중에는 큐 추가 안 함)
+  try {
+    const { data: dis } = await supabase
+      .from('app_secrets').select('value').eq('key', 'SMS_DISABLED').maybeSingle();
+    if (dis?.value === '1') {
+      console.info('[auto-sms] SMS_DISABLED=1 → sms_scheduled INSERT skip');
+      return;
+    }
+  } catch (e) { /* 조회 실패 시 그대로 진행 */ }
+
   try {
     const { data: tpls } = await supabase
       .from('sms_templates')
