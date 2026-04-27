@@ -464,6 +464,21 @@ const InquiryTab = (() => {
 
     const phoneFmt = (inq.phone || '').replace(/^(\d{3})(\d{3,4})(\d{4})$/, '$1-$2-$3');
 
+    // 발신번호 조회 (app_secrets — authenticated SELECT 허용된 ALIGO_SENDER만)
+    let senderPhoneRaw = '';
+    try {
+      const { data: senderRow } = await supabase
+        .from('app_secrets')
+        .select('value')
+        .eq('key', 'ALIGO_SENDER')
+        .maybeSingle();
+      senderPhoneRaw = senderRow?.value || '';
+    } catch (e) { /* RLS 차단 등은 무시 */ }
+    const senderPhoneFmt = senderPhoneRaw
+      ? senderPhoneRaw.replace(/^(\d{3})(\d{3,4})(\d{4})$/, '$1-$2-$3')
+      : '미설정';
+    const senderApproved = senderPhoneRaw && senderPhoneRaw !== '01000000000';
+
     const fmtSentAt = (iso) => {
       if (!iso) return '';
       const d = new Date(iso);
@@ -490,6 +505,17 @@ const InquiryTab = (() => {
           <div class="sms-modal-grid">
             <!-- 좌측: 수신자 정보 + 발송 이력 -->
             <div class="sms-modal-col">
+              <div class="form-group">
+                <label>보내는 번호</label>
+                <div class="sms-receiver-info" style="display:flex; align-items:center; gap:8px; ${senderApproved ? '' : 'background:#FEF3C7; border:1px solid #FCD34D;'}">
+                  <span style="font-size:13px;">📱</span>
+                  <strong style="font-size:14px;">${escHtml(senderPhoneFmt)}</strong>
+                  ${senderApproved
+                    ? '<span style="color:var(--color-success,#10B981); font-size:11px; margin-left:auto;">✓ 등록됨</span>'
+                    : '<span style="color:#92400E; font-size:11px; margin-left:auto;">⚠ 발신번호 미등록 (테스트 불가)</span>'}
+                </div>
+              </div>
+
               <div class="form-group">
                 <label>받는 사람</label>
                 <div class="sms-receiver-info">
