@@ -402,6 +402,7 @@ const InquiryTab = (() => {
       이름: inq.name || '',
       전화번호: inq.phone || '',
       등록일: reg.registered_date || '',
+      등록상품: reg.product || '',
       회수: reg.spt_count != null ? String(reg.spt_count) : '',
       잔여횟수: reg.spt_count != null ? String(reg.spt_count) : '',
       거주지: inq.residence || '',
@@ -430,18 +431,55 @@ const InquiryTab = (() => {
 
     const ctx = buildSmsContext(inq);
 
-    // 템플릿 로드
+    // 템플릿 로드 (send_once 포함)
     const { data: templates } = await supabase
       .from('sms_templates')
-      .select('id, name, msg, msg_type, title, category')
+      .select('id, name, msg, msg_type, title, category, send_once')
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
 
+    // 이 회원 대상 발송 이력 (최근 10건)
+    const { data: priorLogs } = await supabase
+      .from('sms_logs')
+      .select('id, template_id, sent_at, result_code, msg, sms_templates(name, send_once)')
+      .eq('related_table', 'inquiries')
+      .eq('related_id', inq.id)
+      .order('sent_at', { ascending: false })
+      .limit(10);
+
+    // 성공 발송 + send_once 템플릿 → "이미 발송됨" 마커 Set
+    const successOnceSent = new Set(
+      (priorLogs || [])
+        .filter(l => l.result_code > 0 && l.sms_templates?.send_once)
+        .map(l => l.template_id)
+    );
+
     const tplOptions = (templates || [])
-      .map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`)
+      .map(t => {
+        const sentMark = successOnceSent.has(t.id) ? ' ✓ (발송완료)' : '';
+        const onceMark = t.send_once && !successOnceSent.has(t.id) ? ' ⚠ (1회 한정)' : '';
+        return `<option value="${t.id}">${escHtml(t.name)}${sentMark}${onceMark}</option>`;
+      })
       .join('');
 
     const phoneFmt = (inq.phone || '').replace(/^(\d{3})(\d{3,4})(\d{4})$/, '$1-$2-$3');
+
+    const fmtSentAt = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+
+    const priorSection = (priorLogs || []).length === 0
+      ? `<div style="padding:8px 12px; background:var(--color-bg-0); border-radius:6px; font-size:12px; color:var(--color-text-muted);">이 회원 대상 발송 이력 없음</div>`
+      : `<div style="padding:8px 12px; background:var(--color-bg-0); border-radius:6px; font-size:12px;">
+          ${(priorLogs || []).map(l => {
+            const ok = l.result_code > 0;
+            const tplName = l.sms_templates?.name || '직접입력';
+            const okMark = ok ? '<span style="color:var(--color-success,#10B981);">✓</span>' : '<span style="color:var(--color-danger,#DC2626);">✗</span>';
+            return `<div style="margin-bottom:3px;">${okMark} ${fmtSentAt(l.sent_at)} <strong>[${escHtml(tplName)}]</strong></div>`;
+          }).join('')}
+        </div>`;
 
     Modal.open({
       type: 'center',
@@ -458,6 +496,11 @@ const InquiryTab = (() => {
           </div>
 
           <div class="form-group">
+            <label>📋 이 회원 발송 이력 (최근 10건)</label>
+            ${priorSection}
+          </div>
+
+          <div class="form-group">
             <label>템플릿 선택 (선택)</label>
             <select id="sms-template-sel" class="form-control">
               <option value="">-- 직접 입력 --</option>
@@ -471,7 +514,7 @@ const InquiryTab = (() => {
               placeholder="여기에 메시지를 입력하세요. {이름}, {전화번호} 등 변수 사용 가능."
               style="resize:vertical; font-family:inherit; font-size:14px;"></textarea>
             <div class="form-hint">
-              사용 가능 변수: <code>{이름}</code> <code>{전화번호}</code> <code>{등록일}</code> <code>{회수}</code> <code>{거주지}</code>
+              사용 가능 변수: <code>{이름}</code> <code>{전화번호}</code> <code>{등록일}</code> <code>{등록상품}</code> <code>{회수}</code> <code>{거주지}</code>
             </div>
           </div>
 
@@ -520,6 +563,23 @@ const InquiryTab = (() => {
           if (!rawMsg) { Toast.warning('메시지를 입력해주세요.'); return; }
           const finalMsg = applySmsVars(rawMsg, ctx);
 
+          const tplId = tplSel.value;
+          const tpl = tplId ? (templates || []).find(t => t.id === tplId) : null;
+
+          // 1회 한정 템플릿 + 이미 발송 → 경고 다이얼로그
+          if (tpl?.send_once && successOnceSent.has(tpl.id)) {
+            const priorLog = (priorLogs || []).find(
+              l => l.template_id === tpl.id && l.result_code > 0
+            );
+            const sentTime = priorLog ? fmtSentAt(priorLog.sent_at) : '이전';
+            const proceed = confirm(
+              `⚠️ 이미 발송된 1회 한정 템플릿입니다\n\n` +
+              `"${tpl.name}"을(를) ${sentTime}에 이미 발송하셨습니다.\n\n` +
+              `그래도 다시 발송하시겠습니까?`
+            );
+            if (!proceed) return;
+          }
+
           if (!confirm(`아래 내용으로 발송하시겠습니까?\n\n받는 사람: ${inq.name} (${phoneFmt})\n${'─'.repeat(20)}\n${finalMsg}`)) return;
 
           sendBtn.disabled = true;
@@ -529,9 +589,6 @@ const InquiryTab = (() => {
             const { data: session } = await supabase.auth.getSession();
             const jwt = session?.session?.access_token;
             if (!jwt) throw new Error('로그인 세션이 없습니다');
-
-            const tplId = tplSel.value;
-            const tpl = tplId ? (templates || []).find(t => t.id === tplId) : null;
 
             const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
               method: 'POST',
@@ -546,6 +603,7 @@ const InquiryTab = (() => {
                 msg: finalMsg,
                 msg_type: tpl?.msg_type && tpl.msg_type !== 'auto' ? tpl.msg_type : 'auto',
                 title: tpl?.title || null,
+                template_id: tpl?.id || null,
                 related_table: 'inquiries',
                 related_id: inq.id,
               }),
