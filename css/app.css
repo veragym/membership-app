@@ -1958,6 +1958,24 @@ html, body {
 }
 
 /* SMS 발송 모달 */
+.sms-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.sms-modal-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sms-modal-col .form-group {
+  margin-bottom: 12px;
+}
+@media (max-width: 720px) {
+  .sms-modal-grid { grid-template-columns: 1fr; }
+}
+
 .sms-receiver-info {
   padding: 10px 12px;
   background: var(--color-bg-0);
@@ -1975,6 +1993,27 @@ html, body {
   word-break: break-word;
   min-height: 60px;
   color: #78350F;
+}
+
+.sms-tpl-manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--color-bg-0);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill, 999px);
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.sms-tpl-manage-btn:hover {
+  background: var(--color-primary-bg, #FFF7ED);
+  border-color: var(--color-primary, #F97316);
+  color: var(--color-primary, #F97316);
 }
 .form-hint code {
   background: var(--color-bg-2);

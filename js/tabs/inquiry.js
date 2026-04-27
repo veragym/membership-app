@@ -484,49 +484,58 @@ const InquiryTab = (() => {
     Modal.open({
       type: 'center',
       title: '문자 발송',
-      size: 'md',
+      size: 'lg',
       html: `
         <form id="sms-send-form">
-          <div class="form-group">
-            <label>받는 사람</label>
-            <div class="sms-receiver-info">
-              <strong>${escHtml(inq.name || '')}</strong>
-              <span style="color:var(--color-text-muted); margin-left:8px;">${escHtml(phoneFmt)}</span>
+          <div class="sms-modal-grid">
+            <!-- 좌측: 수신자 정보 + 발송 이력 -->
+            <div class="sms-modal-col">
+              <div class="form-group">
+                <label>받는 사람</label>
+                <div class="sms-receiver-info">
+                  <strong>${escHtml(inq.name || '')}</strong>
+                  <span style="color:var(--color-text-muted); margin-left:8px;">${escHtml(phoneFmt)}</span>
+                </div>
+              </div>
+
+              <div class="form-group" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <label>📋 이 회원 발송 이력 (최근 10건)</label>
+                <div style="flex:1; overflow-y:auto; min-height:0;">
+                  ${priorSection}
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label>📋 이 회원 발송 이력 (최근 10건)</label>
-            ${priorSection}
-          </div>
+            <!-- 우측: 템플릿 + 메시지 + 미리보기 -->
+            <div class="sms-modal-col">
+              <div class="form-group">
+                <label style="display:flex; align-items:center; justify-content:space-between;">
+                  <span>템플릿 선택 (선택)</span>
+                  <button type="button" id="sms-tpl-manage" class="sms-tpl-manage-btn">
+                    ⚙️ 템플릿 관리
+                  </button>
+                </label>
+                <select id="sms-template-sel" class="form-control">
+                  <option value="">-- 직접 입력 --</option>
+                  ${tplOptions}
+                </select>
+              </div>
 
-          <div class="form-group">
-            <label style="display:flex; align-items:center; justify-content:space-between;">
-              <span>템플릿 선택 (선택)</span>
-              <button type="button" class="btn-link" id="sms-tpl-manage"
-                style="background:none; border:none; color:var(--color-primary); cursor:pointer; font-size:12px; padding:0; text-decoration:underline;">
-                템플릿 수정 →
-              </button>
-            </label>
-            <select id="sms-template-sel" class="form-control">
-              <option value="">-- 직접 입력 --</option>
-              ${tplOptions}
-            </select>
-          </div>
+              <div class="form-group">
+                <label>메시지 <span id="sms-byte-info" style="color:var(--color-text-muted); font-weight:normal; font-size:12px;">0byte / 단문</span></label>
+                <textarea name="msg" id="sms-msg-input" rows="6" required
+                  placeholder="여기에 메시지를 입력하세요. {이름}, {전화번호} 등 변수 사용 가능."
+                  style="resize:vertical; font-family:inherit; font-size:14px; min-height:140px;"></textarea>
+                <div class="form-hint">
+                  변수: <code>{이름}</code> <code>{전화번호}</code> <code>{등록일}</code> <code>{등록상품}</code> <code>{회수}</code> <code>{거주지}</code>
+                </div>
+              </div>
 
-          <div class="form-group">
-            <label>메시지 <span id="sms-byte-info" style="color:var(--color-text-muted); font-weight:normal; font-size:12px;">0byte / 단문</span></label>
-            <textarea name="msg" id="sms-msg-input" rows="6" required
-              placeholder="여기에 메시지를 입력하세요. {이름}, {전화번호} 등 변수 사용 가능."
-              style="resize:vertical; font-family:inherit; font-size:14px;"></textarea>
-            <div class="form-hint">
-              사용 가능 변수: <code>{이름}</code> <code>{전화번호}</code> <code>{등록일}</code> <code>{등록상품}</code> <code>{회수}</code> <code>{거주지}</code>
+              <div class="form-group">
+                <label>미리보기</label>
+                <div id="sms-preview" class="sms-preview-box"></div>
+              </div>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label>미리보기</label>
-            <div id="sms-preview" class="sms-preview-box"></div>
           </div>
 
           <div class="form-actions">
