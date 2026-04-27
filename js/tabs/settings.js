@@ -588,7 +588,7 @@ const SettingsTab = (() => {
     const listEl = document.getElementById('settings-option-list');
     const { data, error } = await supabase
       .from('sms_templates')
-      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active')
+      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active, auto_send, delay_days')
       .order('is_active', { ascending: false })
       .order('sort_order', { ascending: true });
     if (error) {
@@ -624,15 +624,18 @@ const SettingsTab = (() => {
     const canMoveDown = index !== null && index < total - 1;
     const onceMark = tpl.send_once
       ? `<span class="opt-usage-badge" style="background:#FEE2E2;color:#B91C1C;">1회 한정</span>` : '';
+    const autoMark = tpl.auto_send
+      ? `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">⚡ 자동 +${tpl.delay_days || 1}일</span>` : '';
     const catLabel = (SMS_TPL_CATEGORIES.find(c => c.value === tpl.category) || {}).label || tpl.category || '';
     const msgPreview = (tpl.msg || '').replace(/\n/g, ' ').slice(0, 60) + ((tpl.msg || '').length > 60 ? '…' : '');
     return `
       <div class="settings-option-item ${inactive ? 'inactive' : ''}" data-id="${tpl.id}">
         <div class="opt-order">${tpl.sort_order || ''}</div>
         <div class="opt-value" style="flex-direction:column; align-items:flex-start; gap:4px;">
-          <div style="display:flex; align-items:center; gap:6px;">
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
             <strong>${escapeHtml(tpl.name)}</strong>
             ${onceMark}
+            ${autoMark}
             ${catLabel ? `<span class="opt-usage-badge">${escapeHtml(catLabel)}</span>` : ''}
           </div>
           <div style="font-size:11px; color:var(--color-text-muted);">${escapeHtml(msgPreview)}</div>
@@ -671,10 +674,11 @@ const SettingsTab = (() => {
 
   function buildTemplateForm(tpl) {
     const isEdit = !!tpl;
-    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '' };
+    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '', auto_send: false, delay_days: 1 };
     const catOptions = SMS_TPL_CATEGORIES.map(c =>
       `<option value="${c.value}" ${c.value === t.category ? 'selected' : ''}>${c.label}</option>`
     ).join('');
+    const autoEligible = t.category === 'registration' || t.category === 'pt';
     return `
       <form id="tpl-form">
         <div class="form-group">
@@ -684,7 +688,8 @@ const SettingsTab = (() => {
         </div>
         <div class="form-group">
           <label>카테고리</label>
-          <select name="category">${catOptions}</select>
+          <select name="category" id="tpl-category">${catOptions}</select>
+          <div class="form-hint">자동 발송은 <strong>회원권 등록 / PT 등록</strong> 카테고리만 가능</div>
         </div>
         <div class="form-group">
           <label>메시지 본문 *</label>
@@ -699,12 +704,67 @@ const SettingsTab = (() => {
             <span style="font-size:14px;"><strong>1회 한정 템플릿</strong> — 같은 회원에게 1번만 발송 (재발송 시 경고)</span>
           </label>
         </div>
+        <div class="form-group" id="tpl-auto-section">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:#EFF6FF; border-radius:8px; border:1px solid #93C5FD;">
+            <input type="checkbox" name="auto_send" id="tpl-auto-check" ${t.auto_send ? 'checked' : ''}
+              ${autoEligible ? '' : 'disabled'}
+              style="width:18px; height:18px; flex-shrink:0; accent-color:#1E40AF; margin:0;">
+            <span style="font-size:14px;"><strong>⚡ 자동 발송</strong> — 회원권/PT 등록 후 자동으로 발송</span>
+          </label>
+          <div id="tpl-delay-row" style="margin-top:10px; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; ${t.auto_send ? '' : 'opacity:0.5;'}">
+            <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
+              <span>가입 후</span>
+              <input type="number" name="delay_days" id="tpl-delay-input" min="1" max="365" value="${t.delay_days || 1}"
+                ${(t.auto_send && autoEligible) ? '' : 'disabled'}
+                style="width:80px; padding:6px 10px; font-size:14px;" required>
+              <span>일 후 매일 <strong>10:00 KST</strong>에 자동 발송</span>
+            </label>
+          </div>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
           <button type="submit" class="btn btn-primary">${isEdit ? '저장' : '추가'}</button>
         </div>
       </form>
     `;
+  }
+
+  // 카테고리/자동발송 체크 변경 시 일수 입력 활성화 토글
+  function bindTemplateFormDynamics(el) {
+    const catSel = el.querySelector('#tpl-category');
+    const autoCheck = el.querySelector('#tpl-auto-check');
+    const delayRow = el.querySelector('#tpl-delay-row');
+    const delayInput = el.querySelector('#tpl-delay-input');
+    if (!catSel || !autoCheck || !delayRow || !delayInput) return;
+
+    const update = () => {
+      const cat = catSel.value;
+      const eligible = cat === 'registration' || cat === 'pt';
+      autoCheck.disabled = !eligible;
+      if (!eligible) autoCheck.checked = false;
+      const on = autoCheck.checked && eligible;
+      delayInput.disabled = !on;
+      delayRow.style.opacity = on ? '1' : '0.5';
+    };
+
+    catSel.addEventListener('change', update);
+    autoCheck.addEventListener('change', update);
+  }
+
+  function extractTemplateFormData(form) {
+    const fd = new FormData(form);
+    const category = fd.get('category');
+    const autoEligible = category === 'registration' || category === 'pt';
+    const autoSend = autoEligible && fd.get('auto_send') === 'on';
+    const delayDays = autoSend ? Math.max(1, parseInt(fd.get('delay_days'), 10) || 1) : 1;
+    return {
+      name: fd.get('name').trim(),
+      category,
+      msg: fd.get('msg').trim(),
+      send_once: fd.get('send_once') === 'on',
+      auto_send: autoSend,
+      delay_days: delayDays,
+    };
   }
 
   function openAddTemplate() {
@@ -714,20 +774,13 @@ const SettingsTab = (() => {
       size: 'md',
       html: buildTemplateForm(null),
       onOpen: (el) => {
+        bindTemplateFormDynamics(el);
         el.querySelector('#tpl-form').addEventListener('submit', async (e) => {
           e.preventDefault();
-          const fd = new FormData(e.target);
+          const v = extractTemplateFormData(e.target);
+          if (!v.name || !v.msg) { Toast.warning('이름·메시지 필수'); return; }
           const next = (_smsTemplates.filter(t => t.is_active).reduce((m,t) => Math.max(m, t.sort_order||0), 0) + 1);
-          const row = {
-            name: fd.get('name').trim(),
-            category: fd.get('category'),
-            msg: fd.get('msg').trim(),
-            send_once: fd.get('send_once') === 'on',
-            msg_type: 'auto',
-            sort_order: next,
-            is_active: true,
-          };
-          if (!row.name || !row.msg) { Toast.warning('이름·메시지 필수'); return; }
+          const row = { ...v, msg_type: 'auto', sort_order: next, is_active: true };
           const { error } = await supabase.from('sms_templates').insert(row);
           if (error) { Toast.error('추가 실패: ' + error.message); return; }
           Toast.success('템플릿 추가 완료');
@@ -745,17 +798,12 @@ const SettingsTab = (() => {
       size: 'md',
       html: buildTemplateForm(tpl),
       onOpen: (el) => {
+        bindTemplateFormDynamics(el);
         el.querySelector('#tpl-form').addEventListener('submit', async (e) => {
           e.preventDefault();
-          const fd = new FormData(e.target);
-          const patch = {
-            name: fd.get('name').trim(),
-            category: fd.get('category'),
-            msg: fd.get('msg').trim(),
-            send_once: fd.get('send_once') === 'on',
-            updated_at: new Date().toISOString(),
-          };
-          if (!patch.name || !patch.msg) { Toast.warning('이름·메시지 필수'); return; }
+          const v = extractTemplateFormData(e.target);
+          if (!v.name || !v.msg) { Toast.warning('이름·메시지 필수'); return; }
+          const patch = { ...v, updated_at: new Date().toISOString() };
           const { error } = await supabase.from('sms_templates').update(patch).eq('id', tpl.id);
           if (error) { Toast.error('수정 실패: ' + error.message); return; }
           Toast.success('수정 완료');

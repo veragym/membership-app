@@ -1079,6 +1079,18 @@ const InquiryTab = (() => {
         return;
       }
       Toast.success('문의 + 회원권 등록 완료');
+
+      // 자동 SMS 예약
+      autoScheduleSmsForRegistration({
+        id: newInquiryId,
+        name: payload.name,
+        phone: payload.phone,
+        residence: payload.residence,
+        registered_date: regPayload.registered_date,
+        product: regPayload.product,
+        spt_count: regPayload.spt_count,
+      }, 'registration', 'inquiries');
+
       Modal.close();
       await loadInquiries();
       return;
@@ -1260,6 +1272,18 @@ const InquiryTab = (() => {
 
     // total_payment은 DB GENERATED 컬럼이라 override 불가 — cash/card가 이미 RPC로 저장됐으므로 자동 합산됨
     Toast.success('회원권 등록 완료');
+
+    // 자동 SMS 예약 (회원권 등록 카테고리 + auto_send=true 매칭 템플릿)
+    autoScheduleSmsForRegistration({
+      id: inquiry.id,
+      name: inquiry.name,
+      phone: inquiry.phone,
+      residence: inquiry.residence,
+      registered_date: payload.registered_date,
+      product: payload.product,
+      spt_count: payload.spt_count,
+    }, 'registration', 'inquiries');
+
     Modal.close();
     await loadInquiries();
   }

@@ -593,6 +593,7 @@ const PtTab = (() => {
 
     // v8: 수정 모드 UPDATE / 신규 모드 INSERT 분기
     let error;
+    let newPtId = null;
     if (isEdit) {
       ({ error } = await supabase
         .from('pt_registrations')
@@ -601,11 +602,13 @@ const PtTab = (() => {
     } else {
       payload.name = name;
       payload.phone = phone;
-      ({ error } = await supabase
+      const insertResp = await supabase
         .from('pt_registrations')
         .insert(payload)
         .select('id')
-        .single());
+        .single();
+      error = insertResp.error;
+      newPtId = insertResp.data?.id;
     }
 
     if (error) {
@@ -617,6 +620,18 @@ const PtTab = (() => {
 
     // v7: VeraGym 자동 동기화 비활성 (두 앱 분리 운영). 재활성 시 pg_cron + 폼 sync 둘 다 켜야 함.
     Toast.success(`PT${submitLabel} 저장 완료`);
+
+    // 신규 PT 등록 시 자동 SMS 예약 (PT 카테고리 + auto_send=true 매칭 템플릿)
+    if (!isEdit && newPtId) {
+      autoScheduleSmsForRegistration({
+        id: newPtId,
+        name,
+        phone,
+        contract_date: payload.contract_date,
+        pt_count: payload.pt_count,
+        product: payload.product || null,
+      }, 'pt', 'pt_registrations');
+    }
 
     Modal.close();
     await loadPtRegistrations();
