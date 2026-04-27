@@ -1957,6 +1957,33 @@ html, body {
   flex-shrink: 0;
 }
 
+/* SMS 발송 모달 */
+.sms-receiver-info {
+  padding: 10px 12px;
+  background: var(--color-bg-0);
+  border-radius: 6px;
+  font-size: 14px;
+}
+.sms-preview-box {
+  padding: 12px;
+  background: #FEF3C7;
+  border: 1px solid #FCD34D;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 60px;
+  color: #78350F;
+}
+.form-hint code {
+  background: var(--color-bg-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+
 
 /* 인기순 카테고리: 사용 건수 배지 */
 .opt-usage-badge {

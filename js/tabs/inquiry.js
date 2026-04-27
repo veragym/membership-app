@@ -394,15 +394,180 @@ const InquiryTab = (() => {
     return row;
   }
 
-  // ────────── 문자 발송 모달 (placeholder — Aligo API 연결 전) ──────────
-  function openSmsModal(inq) {
-    Toast.info('문자 발송 기능은 알리고 API 연결 후 활성화됩니다. (준비 중)');
-    // TODO: Aligo API 연결 후 모달로 교체:
-    // - 받는 사람: inq.name, inq.phone 자동 채움
-    // - 템플릿 선택 (sms_templates)
-    // - 메시지 입력 (변수 치환: {이름}, {전화번호})
-    // - 발송 → Edge Function send-sms 호출
-    // - 결과 → sms_logs 저장 + Toast
+  // ────────── 문자 발송 모달 ──────────
+  // 변수 치환 컨텍스트 생성 (inq 행 기준)
+  function buildSmsContext(inq) {
+    const reg = inq.registration || {};
+    return {
+      이름: inq.name || '',
+      전화번호: inq.phone || '',
+      등록일: reg.registered_date || '',
+      회수: reg.spt_count != null ? String(reg.spt_count) : '',
+      잔여횟수: reg.spt_count != null ? String(reg.spt_count) : '',
+      거주지: inq.residence || '',
+    };
+  }
+
+  function applySmsVars(template, ctx) {
+    return String(template || '').replace(/\{([^{}]+)\}/g, (m, key) => {
+      const k = String(key).trim();
+      return ctx[k] != null ? ctx[k] : m;  // 매칭 안 되면 원형 유지
+    });
+  }
+
+  function smsByteLength(s) {
+    // 한글 2byte, 영문/숫자/공백 1byte (알리고 단/장문 분기 기준 근사치)
+    let n = 0;
+    for (const ch of String(s)) n += ch.charCodeAt(0) > 127 ? 2 : 1;
+    return n;
+  }
+
+  async function openSmsModal(inq) {
+    if (!inq.phone) {
+      Toast.warning('전화번호가 없는 문의입니다.');
+      return;
+    }
+
+    const ctx = buildSmsContext(inq);
+
+    // 템플릿 로드
+    const { data: templates } = await supabase
+      .from('sms_templates')
+      .select('id, name, msg, msg_type, title, category')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    const tplOptions = (templates || [])
+      .map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`)
+      .join('');
+
+    const phoneFmt = (inq.phone || '').replace(/^(\d{3})(\d{3,4})(\d{4})$/, '$1-$2-$3');
+
+    Modal.open({
+      type: 'center',
+      title: '문자 발송',
+      size: 'md',
+      html: `
+        <form id="sms-send-form">
+          <div class="form-group">
+            <label>받는 사람</label>
+            <div class="sms-receiver-info">
+              <strong>${escHtml(inq.name || '')}</strong>
+              <span style="color:var(--color-text-muted); margin-left:8px;">${escHtml(phoneFmt)}</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>템플릿 선택 (선택)</label>
+            <select id="sms-template-sel" class="form-control">
+              <option value="">-- 직접 입력 --</option>
+              ${tplOptions}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>메시지 <span id="sms-byte-info" style="color:var(--color-text-muted); font-weight:normal; font-size:12px;">0byte / 단문</span></label>
+            <textarea name="msg" id="sms-msg-input" rows="6" required
+              placeholder="여기에 메시지를 입력하세요. {이름}, {전화번호} 등 변수 사용 가능."
+              style="resize:vertical; font-family:inherit; font-size:14px;"></textarea>
+            <div class="form-hint">
+              사용 가능 변수: <code>{이름}</code> <code>{전화번호}</code> <code>{등록일}</code> <code>{회수}</code> <code>{거주지}</code>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>미리보기</label>
+            <div id="sms-preview" class="sms-preview-box"></div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+            <button type="submit" class="btn btn-primary" id="sms-send-btn">발송하기</button>
+          </div>
+        </form>
+      `,
+      onOpen: (el) => {
+        const tplSel = el.querySelector('#sms-template-sel');
+        const msgInput = el.querySelector('#sms-msg-input');
+        const preview = el.querySelector('#sms-preview');
+        const byteInfo = el.querySelector('#sms-byte-info');
+
+        function updatePreview() {
+          const raw = msgInput.value;
+          const replaced = applySmsVars(raw, ctx);
+          preview.textContent = replaced || '(메시지 미입력)';
+          const b = smsByteLength(replaced);
+          const kind = b > 90 ? `장문 (LMS)` : `단문 (SMS)`;
+          byteInfo.textContent = `${b}byte / ${kind}`;
+        }
+
+        tplSel.addEventListener('change', () => {
+          const tplId = tplSel.value;
+          if (!tplId) return;
+          const tpl = (templates || []).find(t => t.id === tplId);
+          if (tpl) {
+            msgInput.value = tpl.msg;
+            updatePreview();
+          }
+        });
+        msgInput.addEventListener('input', updatePreview);
+        updatePreview();
+
+        el.querySelector('#sms-send-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const sendBtn = el.querySelector('#sms-send-btn');
+          const rawMsg = msgInput.value.trim();
+          if (!rawMsg) { Toast.warning('메시지를 입력해주세요.'); return; }
+          const finalMsg = applySmsVars(rawMsg, ctx);
+
+          if (!confirm(`아래 내용으로 발송하시겠습니까?\n\n받는 사람: ${inq.name} (${phoneFmt})\n${'─'.repeat(20)}\n${finalMsg}`)) return;
+
+          sendBtn.disabled = true;
+          sendBtn.textContent = '발송 중...';
+
+          try {
+            const { data: session } = await supabase.auth.getSession();
+            const jwt = session?.session?.access_token;
+            if (!jwt) throw new Error('로그인 세션이 없습니다');
+
+            const tplId = tplSel.value;
+            const tpl = tplId ? (templates || []).find(t => t.id === tplId) : null;
+
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${jwt}`,
+                'apikey': SUPABASE_ANON_KEY,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                receiver: inq.phone,
+                receiver_name: inq.name,
+                msg: finalMsg,
+                msg_type: tpl?.msg_type && tpl.msg_type !== 'auto' ? tpl.msg_type : 'auto',
+                title: tpl?.title || null,
+                related_table: 'inquiries',
+                related_id: inq.id,
+              }),
+            });
+            const json = await res.json();
+
+            if (json.ok) {
+              Toast.success('문자 발송 성공');
+              Modal.close();
+            } else {
+              Toast.error('발송 실패: ' + (json.error || json.message || `HTTP ${res.status}`));
+            }
+          } catch (err) {
+            console.error('[sms] 발송 실패:', err);
+            Toast.error('발송 실패: ' + (err.message || err));
+          } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = '발송하기';
+          }
+        });
+      }
+    });
   }
 
   // ────────── 문의 추가 시 자동완성 (inquiries 테이블 — 읽기만) ──────────
