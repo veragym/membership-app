@@ -688,14 +688,16 @@ const SettingsTab = (() => {
         </div>
         <div class="form-group">
           <label>메시지 본문 *</label>
-          <textarea name="msg" rows="6" required style="font-family:inherit; font-size:14px; resize:vertical;"
+          <textarea name="msg" rows="10" required
+            style="font-family:inherit; font-size:14px; resize:vertical; min-height:220px; width:100%;"
             placeholder="안녕하세요 {이름}님, ...">${escapeHtml(t.msg)}</textarea>
           <div class="form-hint">사용 가능 변수: <code>${SMS_VARS_HINT}</code></div>
         </div>
         <div class="form-group">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" name="send_once" ${t.send_once ? 'checked' : ''}>
-            <span><strong>1회 한정 템플릿</strong> — 같은 회원에게 1번만 발송 (재발송 시 경고)</span>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; border:1px solid var(--color-border);">
+            <input type="checkbox" name="send_once" ${t.send_once ? 'checked' : ''}
+              style="width:18px; height:18px; flex-shrink:0; accent-color:var(--color-primary, #F97316); margin:0;">
+            <span style="font-size:14px;"><strong>1회 한정 템플릿</strong> — 같은 회원에게 1번만 발송 (재발송 시 경고)</span>
           </label>
         </div>
         <div class="form-actions">

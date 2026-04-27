@@ -501,7 +501,13 @@ const InquiryTab = (() => {
           </div>
 
           <div class="form-group">
-            <label>템플릿 선택 (선택)</label>
+            <label style="display:flex; align-items:center; justify-content:space-between;">
+              <span>템플릿 선택 (선택)</span>
+              <button type="button" class="btn-link" id="sms-tpl-manage"
+                style="background:none; border:none; color:var(--color-primary); cursor:pointer; font-size:12px; padding:0; text-decoration:underline;">
+                템플릿 수정 →
+              </button>
+            </label>
             <select id="sms-template-sel" class="form-control">
               <option value="">-- 직접 입력 --</option>
               ${tplOptions}
@@ -534,6 +540,23 @@ const InquiryTab = (() => {
         const msgInput = el.querySelector('#sms-msg-input');
         const preview = el.querySelector('#sms-preview');
         const byteInfo = el.querySelector('#sms-byte-info');
+
+        // 템플릿 수정 버튼 → 모달 닫고 설정 탭의 '문자 템플릿' 으로 이동
+        const tplMgrBtn = el.querySelector('#sms-tpl-manage');
+        if (tplMgrBtn) {
+          tplMgrBtn.addEventListener('click', () => {
+            Modal.close();
+            const settingsTabBtn = document.querySelector('.tab-btn[data-tab="settings"]');
+            if (settingsTabBtn) {
+              settingsTabBtn.click();
+              // 설정 탭이 렌더링된 후 '문자 템플릿' 카테고리 선택
+              setTimeout(() => {
+                const tplCat = document.querySelector('.settings-category-item[data-category="문자 템플릿"]');
+                if (tplCat) tplCat.click();
+              }, 150);
+            }
+          });
+        }
 
         function updatePreview() {
           const raw = msgInput.value;
