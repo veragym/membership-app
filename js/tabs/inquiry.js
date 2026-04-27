@@ -9,7 +9,8 @@
 const InquiryTab = (() => {
   let allInquiries = [];
   let searchQuery = '';
-  let statusFilter = 'all';   // 'all' | 'registered' | 'unregistered'
+  let statusFilter = 'all';     // 'all' | 'registered' | 'unregistered'
+  let categoryFilter = 'all';   // 'all' | '신규' | '재등록'
   // v6.1: 담당자 필터 단일화 — 타입(계약/매출) + 이름 1개로 통합
   let managerFilterType = 'contract'; // 'contract' | 'sales'
   let managerFilterName = '';
@@ -41,6 +42,11 @@ const InquiryTab = (() => {
           <button class="btn btn-chip active" data-status="all">전체</button>
           <button class="btn btn-chip" data-status="unregistered">미등록</button>
           <button class="btn btn-chip" data-status="registered">등록</button>
+        </div>
+        <div class="status-filter" role="group" aria-label="구분 필터">
+          <button class="btn btn-chip active" data-category="all">전체</button>
+          <button class="btn btn-chip" data-category="신규">신규</button>
+          <button class="btn btn-chip" data-category="재등록">재등록</button>
         </div>
         <div class="manager-filter">
           <select id="filter-manager-type" class="filter-select">
@@ -82,12 +88,23 @@ const InquiryTab = (() => {
       }, 300)
     );
 
-    // 등록/미등록 필터 칩
-    pane.querySelectorAll('.status-filter .btn-chip').forEach(btn => {
+    // 등록 상태 필터 칩 (전체/미등록/등록)
+    pane.querySelectorAll('.status-filter[aria-label="등록 상태 필터"] .btn-chip').forEach(btn => {
       btn.addEventListener('click', () => {
-        pane.querySelectorAll('.status-filter .btn-chip').forEach(b => b.classList.remove('active'));
+        pane.querySelectorAll('.status-filter[aria-label="등록 상태 필터"] .btn-chip').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         statusFilter = btn.dataset.status;
+        displayLimit = PAGE_SIZE;
+        loadInquiries();
+      });
+    });
+
+    // 구분 필터 칩 (전체/신규/재등록)
+    pane.querySelectorAll('.status-filter[aria-label="구분 필터"] .btn-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pane.querySelectorAll('.status-filter[aria-label="구분 필터"] .btn-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        categoryFilter = btn.dataset.category;
         displayLimit = PAGE_SIZE;
         loadInquiries();
       });
@@ -138,6 +155,9 @@ const InquiryTab = (() => {
     if (hasStatusFilter) {
       query = query.eq('status', statusFilter);
     }
+    if (categoryFilter !== 'all') {
+      query = query.eq('category', categoryFilter);
+    }
     if (hasManagerFilter) {
       const col = managerFilterType === 'contract' ? 'contract_manager' : 'sales_manager';
       const m = sanitizeSearch(managerFilterName);  // v25: % 이스케이프 누락 수정
@@ -171,6 +191,7 @@ const InquiryTab = (() => {
         .order('created_at', { ascending: false })
         .limit(300);
       if (hasStatusFilter) pastQuery = pastQuery.eq('status', statusFilter);
+      if (categoryFilter !== 'all') pastQuery = pastQuery.eq('category', categoryFilter);
       const { data: pastData } = await pastQuery;
       if (pastData && pastData.length) {
         const seen = new Map(merged.map(r => [r.id, r]));
