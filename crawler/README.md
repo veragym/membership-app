@@ -30,7 +30,7 @@ python place_rank.py <keyword_id> # 특정 키워드 1개
 
 - 워크플로: `.github/workflows/place-rank.yml`
 - secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-- cron: `7 */2 * * *` (매 2시간 7분) + 파이썬 내부 0~59분 랜덤 지연
+- cron: 매일 KST 06:00 / 13:00 / 23:00 (UTC 21 / 04 / 14) + 파이썬 내부 0~5분 랜덤 지연
 - 수동 트리거: Actions 탭 Run workflow / Supabase Edge Function `trigger-place-rank`
 
 ## 감지 회피

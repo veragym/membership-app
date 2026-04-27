@@ -796,9 +796,10 @@ def main():
     if arg == "test":
         asyncio.run(run_test())
     elif arg in ("all", "auto"):
+        # 정해진 시간(06/13/23)에 가까이 실행되도록 jitter 최소화 (0~5분)
         if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
             import time
-            delay = random.randint(0, 3540)
+            delay = random.randint(0, 300)
             print(f"[info] schedule jitter sleep {delay}s")
             time.sleep(delay)
         asyncio.run(run_all("auto"))

@@ -10,7 +10,7 @@
  *
  * 조회 흐름:
  *   1) 사용자가 키워드 CRUD
- *   2) 자동: GitHub Actions cron (2시간마다) → history 누적
+ *   2) 자동: GitHub Actions cron (매일 06:00 / 13:00 / 23:00 KST) → history 누적
  *   3) 수동: "지금 조회" → Supabase Edge Function `trigger-place-rank`
  *      → GitHub workflow_dispatch → 크롤러 → history insert
  *
@@ -58,7 +58,7 @@ const PromoPlaceTab = (() => {
             </div>
             <div class="place-rank-hint">
               · 주소에 <b>미사</b> 포함 → 미사점으로 자동 분류<br>
-              · 자동 조회: 2시간마다 · 1~5페이지 순회
+              · 자동 조회: 매일 06:00 · 13:00 · 23:00 · 1~5페이지 순회
             </div>
           </aside>
 
