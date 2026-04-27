@@ -2,7 +2,10 @@ name: Place Rank Crawler
 
 on:
   schedule:
-    - cron: '7 */2 * * *'
+    # 하루 3회 KST 06:00 / 13:00 / 23:00 = UTC 21(전날) / 04 / 14
+    - cron: '0 21 * * *'
+    - cron: '0 4 * * *'
+    - cron: '0 14 * * *'
   workflow_dispatch:
     inputs:
       keyword_id:
