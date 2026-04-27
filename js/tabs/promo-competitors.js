@@ -167,7 +167,7 @@ const PromoCompetitorsTab = (() => {
           <thead>
             <tr>
               <th style="width:48px;">#</th>
-              <th style="width:64px;">사진</th>
+              <th style="width:96px;">사진</th>
               <th>업체명</th>
               <th style="width:56px;">페이지</th>
               <th style="width:80px;">구분</th>
