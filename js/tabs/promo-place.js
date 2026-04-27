@@ -41,7 +41,6 @@ const PromoPlaceTab = (() => {
         <div class="place-rank-header">
           <h3 class="place-rank-title">네이버 플레이스 순위 추적</h3>
           <div class="place-rank-header-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="prPrefillBtn" title="예시 키워드 일괄 추가">예시 키워드 채우기</button>
             <button type="button" class="btn btn-primary" id="prManualBtn">⚡ 지금 조회</button>
           </div>
         </div>
@@ -79,7 +78,6 @@ const PromoPlaceTab = (() => {
 
   function bindHeader() {
     document.getElementById('prManualBtn').addEventListener('click', triggerManualAll);
-    document.getElementById('prPrefillBtn').addEventListener('click', handlePrefill);
   }
 
   function bindAddForm() {
@@ -387,24 +385,6 @@ const PromoPlaceTab = (() => {
       Toast.error('변경 실패: ' + error.message);
       return;
     }
-    await loadAll();
-  }
-
-  async function handlePrefill() {
-    const examples = ['미사헬스장', '동탄헬스장', '망월동헬스장', '청계동헬스장', '미사강변헬스장'];
-    const toAdd = examples.filter(kw => !keywords.some(k => k.keyword === kw));
-    if (!toAdd.length) { Toast.info('이미 모두 등록되어 있습니다.'); return; }
-    if (!confirm(`다음 ${toAdd.length}개 키워드를 추가할까요?\n- ` + toAdd.join('\n- '))) return;
-    const trainer = Auth.getTrainer();
-    const rows = toAdd.map((kw, i) => ({
-      keyword: kw,
-      is_active: true,
-      sort_order: keywords.length + i,
-      created_by: trainer ? trainer.id : null,
-    }));
-    const { error } = await supabase.from('place_rank_keywords').insert(rows);
-    if (error) { Toast.error('일괄 추가 실패: ' + error.message); return; }
-    Toast.success(`${toAdd.length}개 추가됨`);
     await loadAll();
   }
 
