@@ -690,8 +690,7 @@ const SettingsTab = (() => {
           <label>메시지 본문 *</label>
           <textarea name="msg" rows="10" required
             style="font-family:inherit; font-size:14px; resize:vertical; min-height:220px; width:100%;"
-            placeholder="안녕하세요 {이름}님, ...">${escapeHtml(t.msg)}</textarea>
-          <div class="form-hint">사용 가능 변수: <code>${SMS_VARS_HINT}</code></div>
+            placeholder="안녕하세요 ...">${escapeHtml(t.msg)}</textarea>
         </div>
         <div class="form-group">
           <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; border:1px solid var(--color-border);">

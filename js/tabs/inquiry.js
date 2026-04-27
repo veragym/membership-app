@@ -524,11 +524,8 @@ const InquiryTab = (() => {
               <div class="form-group">
                 <label>메시지 <span id="sms-byte-info" style="color:var(--color-text-muted); font-weight:normal; font-size:12px;">0byte / 단문</span></label>
                 <textarea name="msg" id="sms-msg-input" rows="6" required
-                  placeholder="여기에 메시지를 입력하세요. {이름}, {전화번호} 등 변수 사용 가능."
+                  placeholder="여기에 메시지를 입력하세요."
                   style="resize:vertical; font-family:inherit; font-size:14px; min-height:140px;"></textarea>
-                <div class="form-hint">
-                  변수: <code>{이름}</code> <code>{전화번호}</code> <code>{등록일}</code> <code>{등록상품}</code> <code>{회수}</code> <code>{거주지}</code>
-                </div>
               </div>
 
               <div class="form-group">

@@ -422,6 +422,11 @@ html, body {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-modal);
 }
+
+.modal-center.modal-sm { max-width: 360px; }
+.modal-center.modal-md { max-width: 560px; }
+.modal-center.modal-lg { max-width: 920px; }
+.modal-center.modal-xl { max-width: 1100px; }
 .modal-center.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 
 /* ── Bottom Sheet ── */
