@@ -24,11 +24,24 @@ const SettingsTab = (() => {
     { key: 'PT상품',       desc: 'PT 등록 패키지 (PT10회/PT20회/...)' },
     { key: '매출담당자',   desc: '매출 담당 직원' },
     { key: '업무카테고리', desc: '업무관리 카테고리 (색상 지정 가능)' },
+    { key: '문자 템플릿',  desc: 'SMS 발송 템플릿 (1회 한정 옵션 / 변수 지원)' },
   ];
 
   // 색상 필수 카테고리 — 추가/수정 폼에 color picker 노출
   const COLOR_ENABLED = new Set(['업무카테고리']);
   const DEFAULT_COLOR = '#6B7280';
+
+  // SMS 템플릿 전용 카테고리 옵션
+  const SMS_TPL_CATEGORIES = [
+    { value: 'registration', label: '회원권 등록' },
+    { value: 'pt',           label: 'PT 등록' },
+    { value: 'inquiry',      label: '문의 응대' },
+    { value: 'spt',          label: 'SPT 안내' },
+    { value: 'general',      label: '일반/이벤트' },
+  ];
+
+  // 문자 템플릿 사용 가능 변수 가이드
+  const SMS_VARS_HINT = '{이름} {전화번호} {등록일} {등록상품} {회수} {거주지}';
 
   let activeCategory = '구분';
   let currentOptions = [];  // 현재 카테고리의 옵션 리스트
@@ -104,12 +117,21 @@ const SettingsTab = (() => {
     });
 
     // 옵션 추가
-    pane.querySelector('#btn-add-option').addEventListener('click', () => openAddForm());
+    pane.querySelector('#btn-add-option').addEventListener('click', () => {
+      if (activeCategory === '문자 템플릿') openAddTemplate();
+      else openAddForm();
+    });
   }
 
   async function loadCategory(category) {
     const listEl = document.getElementById('settings-option-list');
     listEl.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+    // 분기: SMS 템플릿
+    if (category === '문자 템플릿') {
+      await loadSmsTemplates();
+      return;
+    }
 
     const { data, error } = await supabase
       .from('dropdown_options')
@@ -555,6 +577,241 @@ const SettingsTab = (() => {
     return String(s ?? '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // SMS 템플릿 관리 (sms_templates 테이블)
+  // ═══════════════════════════════════════════════════════
+  let _smsTemplates = [];
+
+  async function loadSmsTemplates() {
+    const listEl = document.getElementById('settings-option-list');
+    const { data, error } = await supabase
+      .from('sms_templates')
+      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active')
+      .order('is_active', { ascending: false })
+      .order('sort_order', { ascending: true });
+    if (error) {
+      Toast.error('템플릿 로드 실패: ' + error.message);
+      listEl.innerHTML = '<div class="empty-state">로드 실패</div>';
+      return;
+    }
+    _smsTemplates = data || [];
+    renderSmsTemplateList();
+  }
+
+  function renderSmsTemplateList() {
+    const listEl = document.getElementById('settings-option-list');
+    if (!_smsTemplates.length) {
+      listEl.innerHTML = '<div class="empty-state">템플릿이 없습니다. + 옵션 추가 버튼으로 등록하세요.</div>';
+      return;
+    }
+    const active = _smsTemplates.filter(t => t.is_active);
+    const inactive = _smsTemplates.filter(t => !t.is_active);
+
+    listEl.innerHTML = `
+      ${active.length ? `<div class="settings-option-group-label">활성 (${active.length})</div>` : ''}
+      <div class="settings-option-items">${active.map((t, i) => renderSmsTemplateItem(t, i, active.length)).join('')}</div>
+      ${inactive.length ? `<div class="settings-option-group-label">비활성 (${inactive.length})</div>
+        <div class="settings-option-items">${inactive.map(t => renderSmsTemplateItem(t, null, 0)).join('')}</div>` : ''}
+    `;
+    bindSmsTemplateEvents();
+  }
+
+  function renderSmsTemplateItem(tpl, index, total) {
+    const inactive = !tpl.is_active;
+    const canMoveUp   = index !== null && index > 0;
+    const canMoveDown = index !== null && index < total - 1;
+    const onceMark = tpl.send_once
+      ? `<span class="opt-usage-badge" style="background:#FEE2E2;color:#B91C1C;">1회 한정</span>` : '';
+    const catLabel = (SMS_TPL_CATEGORIES.find(c => c.value === tpl.category) || {}).label || tpl.category || '';
+    const msgPreview = (tpl.msg || '').replace(/\n/g, ' ').slice(0, 60) + ((tpl.msg || '').length > 60 ? '…' : '');
+    return `
+      <div class="settings-option-item ${inactive ? 'inactive' : ''}" data-id="${tpl.id}">
+        <div class="opt-order">${tpl.sort_order || ''}</div>
+        <div class="opt-value" style="flex-direction:column; align-items:flex-start; gap:4px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <strong>${escapeHtml(tpl.name)}</strong>
+            ${onceMark}
+            ${catLabel ? `<span class="opt-usage-badge">${escapeHtml(catLabel)}</span>` : ''}
+          </div>
+          <div style="font-size:11px; color:var(--color-text-muted);">${escapeHtml(msgPreview)}</div>
+        </div>
+        <div class="opt-actions">
+          ${!inactive ? `
+            <button type="button" class="btn-icon btn-tpl-up"   ${canMoveUp ? '' : 'disabled'} title="위로">↑</button>
+            <button type="button" class="btn-icon btn-tpl-down" ${canMoveDown ? '' : 'disabled'} title="아래로">↓</button>
+            <button type="button" class="btn-icon btn-tpl-edit" title="수정">수정</button>
+            <button type="button" class="btn-icon btn-deactivate btn-tpl-toggle" data-active="false" title="비활성">비활성</button>
+            <button type="button" class="btn-icon btn-delete btn-tpl-delete" title="완전 삭제">삭제</button>
+          ` : `
+            <button type="button" class="btn-icon btn-activate btn-tpl-toggle" data-active="true" title="다시 활성화">활성화</button>
+            <button type="button" class="btn-icon btn-delete btn-tpl-delete" title="완전 삭제">삭제</button>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  function bindSmsTemplateEvents() {
+    document.querySelectorAll('#settings-option-list .settings-option-item').forEach(row => {
+      const id = row.dataset.id;
+      const tpl = _smsTemplates.find(t => t.id === id);
+      if (!tpl) return;
+      row.querySelector('.btn-tpl-up')?.addEventListener('click', () => moveSmsTemplate(tpl, -1));
+      row.querySelector('.btn-tpl-down')?.addEventListener('click', () => moveSmsTemplate(tpl, +1));
+      row.querySelector('.btn-tpl-edit')?.addEventListener('click', () => openEditTemplate(tpl));
+      row.querySelector('.btn-tpl-toggle')?.addEventListener('click', (e) => {
+        const setTo = e.currentTarget.dataset.active === 'true';
+        setSmsTemplateActive(tpl, setTo);
+      });
+      row.querySelector('.btn-tpl-delete')?.addEventListener('click', () => confirmDeleteTemplate(tpl));
+    });
+  }
+
+  function buildTemplateForm(tpl) {
+    const isEdit = !!tpl;
+    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '' };
+    const catOptions = SMS_TPL_CATEGORIES.map(c =>
+      `<option value="${c.value}" ${c.value === t.category ? 'selected' : ''}>${c.label}</option>`
+    ).join('');
+    return `
+      <form id="tpl-form">
+        <div class="form-group">
+          <label>템플릿 이름 *</label>
+          <input type="text" name="name" value="${escapeHtml(t.name)}" required autofocus
+            placeholder="예: 회원권 등록 환영">
+        </div>
+        <div class="form-group">
+          <label>카테고리</label>
+          <select name="category">${catOptions}</select>
+        </div>
+        <div class="form-group">
+          <label>메시지 본문 *</label>
+          <textarea name="msg" rows="6" required style="font-family:inherit; font-size:14px; resize:vertical;"
+            placeholder="안녕하세요 {이름}님, ...">${escapeHtml(t.msg)}</textarea>
+          <div class="form-hint">사용 가능 변수: <code>${SMS_VARS_HINT}</code></div>
+        </div>
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="send_once" ${t.send_once ? 'checked' : ''}>
+            <span><strong>1회 한정 템플릿</strong> — 같은 회원에게 1번만 발송 (재발송 시 경고)</span>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+          <button type="submit" class="btn btn-primary">${isEdit ? '저장' : '추가'}</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function openAddTemplate() {
+    Modal.open({
+      type: 'center',
+      title: '문자 템플릿 추가',
+      size: 'md',
+      html: buildTemplateForm(null),
+      onOpen: (el) => {
+        el.querySelector('#tpl-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const next = (_smsTemplates.filter(t => t.is_active).reduce((m,t) => Math.max(m, t.sort_order||0), 0) + 1);
+          const row = {
+            name: fd.get('name').trim(),
+            category: fd.get('category'),
+            msg: fd.get('msg').trim(),
+            send_once: fd.get('send_once') === 'on',
+            msg_type: 'auto',
+            sort_order: next,
+            is_active: true,
+          };
+          if (!row.name || !row.msg) { Toast.warning('이름·메시지 필수'); return; }
+          const { error } = await supabase.from('sms_templates').insert(row);
+          if (error) { Toast.error('추가 실패: ' + error.message); return; }
+          Toast.success('템플릿 추가 완료');
+          Modal.close();
+          await loadSmsTemplates();
+        });
+      }
+    });
+  }
+
+  function openEditTemplate(tpl) {
+    Modal.open({
+      type: 'center',
+      title: '문자 템플릿 수정',
+      size: 'md',
+      html: buildTemplateForm(tpl),
+      onOpen: (el) => {
+        el.querySelector('#tpl-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const patch = {
+            name: fd.get('name').trim(),
+            category: fd.get('category'),
+            msg: fd.get('msg').trim(),
+            send_once: fd.get('send_once') === 'on',
+            updated_at: new Date().toISOString(),
+          };
+          if (!patch.name || !patch.msg) { Toast.warning('이름·메시지 필수'); return; }
+          const { error } = await supabase.from('sms_templates').update(patch).eq('id', tpl.id);
+          if (error) { Toast.error('수정 실패: ' + error.message); return; }
+          Toast.success('수정 완료');
+          Modal.close();
+          await loadSmsTemplates();
+        });
+      }
+    });
+  }
+
+  async function moveSmsTemplate(tpl, dir) {
+    const active = _smsTemplates.filter(t => t.is_active);
+    const idx = active.findIndex(t => t.id === tpl.id);
+    if (idx < 0) return;
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= active.length) return;
+    const a = active[idx], b = active[swapIdx];
+    // swap sort_order via 임시값 회피 (UNIQUE 없지만 안전)
+    const ao = a.sort_order, bo = b.sort_order;
+    const r1 = await supabase.from('sms_templates').update({ sort_order: -1 }).eq('id', a.id);
+    if (r1.error) { Toast.error('순서 변경 실패: ' + r1.error.message); return; }
+    await supabase.from('sms_templates').update({ sort_order: ao }).eq('id', b.id);
+    await supabase.from('sms_templates').update({ sort_order: bo }).eq('id', a.id);
+    await loadSmsTemplates();
+  }
+
+  async function setSmsTemplateActive(tpl, active) {
+    const { error } = await supabase.from('sms_templates').update({ is_active: active }).eq('id', tpl.id);
+    if (error) { Toast.error('변경 실패: ' + error.message); return; }
+    Toast.success(active ? '활성화됨' : '비활성화됨');
+    await loadSmsTemplates();
+  }
+
+  function confirmDeleteTemplate(tpl) {
+    Modal.open({
+      type: 'center', title: '템플릿 삭제 확인', size: 'sm',
+      html: `
+        <p style="margin:0 0 12px;">"<strong>${escapeHtml(tpl.name)}</strong>" 을 완전 삭제하시겠습니까?</p>
+        <p class="form-hint" style="color:var(--color-danger,#DC2626);">
+          * 이 작업은 되돌릴 수 없습니다.<br>
+          * 이미 발송된 sms_logs는 영향받지 않습니다 (template_id가 NULL이 됨).
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+          <button type="button" class="btn btn-danger" id="btn-tpl-confirm-del">완전 삭제</button>
+        </div>
+      `,
+      onOpen: (el) => {
+        el.querySelector('#btn-tpl-confirm-del').addEventListener('click', async () => {
+          const { error } = await supabase.from('sms_templates').delete().eq('id', tpl.id);
+          if (error) { Toast.error('삭제 실패: ' + error.message); return; }
+          Toast.success('삭제됨');
+          Modal.close();
+          await loadSmsTemplates();
+        });
+      }
+    });
   }
 
   return { init };
