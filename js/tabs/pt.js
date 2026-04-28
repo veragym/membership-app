@@ -253,29 +253,32 @@ const PtTab = (() => {
           <div class="form-grid" style="margin-bottom:14px;">
             <div class="form-group">
               <label>추가 회수 *</label>
-              <input type="number" name="add_count" id="upg-add-count" min="1" placeholder="예: 5" required>
+              <input type="number" name="add_count" id="upg-add-count" min="1" placeholder="예: 12" required>
             </div>
             <div class="form-group">
-              <label>신규 세션 단가 *</label>
-              <input type="number" name="new_session_price" id="upg-new-price" min="0" placeholder="${prevPrice.toLocaleString()}" required>
-              <div class="form-hint" style="font-size:11px; color:var(--color-text-muted); margin-top:4px;">기존: ${prevPrice.toLocaleString()}원/회</div>
+              <label>새 패키지 단가 (참고) <span style="font-weight:400;color:var(--color-text-muted);font-size:11px;">— 안내가, VAT 제외</span></label>
+              <input type="number" name="new_package_price" id="upg-new-pkg-price" min="0" placeholder="예: 54000">
+              <div class="form-hint" style="font-size:11px; color:var(--color-text-muted); margin-top:4px;">회원에게 안내한 합산 후 회당 단가 (DB 저장 X · 검증용)</div>
             </div>
-            <div class="form-group">
-              <label>추가 금액 (자동)</label>
-              <input type="text" id="upg-contract-amount" readonly disabled value="0원" style="background:var(--color-bg-2); font-weight:600;">
-            </div>
-            <div class="form-group">
-              <label>총 결제액 (VAT 10%, 자동)</label>
-              <input type="text" id="upg-total-payment" readonly disabled value="0원" style="background:var(--color-bg-2); font-weight:600;">
-            </div>
-            <div class="form-group">
-              <label>현금/계좌</label>
+            <div class="form-group full">
+              <label>차액 결제 — 현금/계좌</label>
               <input type="number" name="paid_cash" id="upg-cash" min="0" placeholder="0">
             </div>
-            <div class="form-group">
-              <label>카드</label>
+            <div class="form-group full">
+              <label>차액 결제 — 카드</label>
               <input type="number" name="paid_card" id="upg-card" min="0" placeholder="0">
             </div>
+          </div>
+
+          <div id="upg-calc-box" style="padding:12px 14px; background:var(--color-bg-0); border-radius:8px; margin-bottom:14px; font-size:13px; line-height:1.9;">
+            <div style="font-weight:600; color:var(--color-text-secondary); margin-bottom:6px;">자동 계산 (VAT 제외 기준)</div>
+            <div>· 차액 결제(VAT 제외): <strong id="upg-net-calc">0원</strong> <span style="color:var(--color-text-muted);font-size:11px;">(VAT 포함 결제 ÷ 1.1)</span></div>
+            <div>· 차액 회당 단가 (DB 저장): <strong id="upg-eff-price">0원</strong> <span style="color:var(--color-text-muted);font-size:11px;">(차액 ÷ 추가회수)</span></div>
+            <div>· 합산 가중평균 단가: <strong id="upg-weighted-avg" style="color:#1E40AF;">0원</strong> <span style="color:var(--color-text-muted);font-size:11px;">— 안내가와 일치해야 정확</span></div>
+            <div id="upg-warn" style="margin-top:6px; color:#B91C1C; font-size:12px; display:none;">⚠ 합산 가중평균이 안내가와 다릅니다. 결제 금액을 확인하세요.</div>
+          </div>
+
+          <div class="form-grid" style="margin-bottom:14px;">
             <div class="form-group">
               <label>매출담당 (변경 시 선택)</label>
               <select name="assigned_trainer_id" class="form-select">
@@ -293,15 +296,15 @@ const PtTab = (() => {
               </select>
             </div>
             <div class="form-group full">
-              <label>메모 (업그레이드 사유 등)</label>
-              <input type="text" name="note" placeholder="예: 회원 요청, 패키지 전환 등" maxlength="500">
+              <label>메모 (업그레이드 사유 / 안내 단가 등)</label>
+              <input type="text" name="note" placeholder="예: 24→36회 패키지 전환 (54,000원/회 안내)" maxlength="500">
             </div>
           </div>
 
           <div class="form-hint" style="font-size:12px; color:var(--color-text-secondary); margin:8px 0 12px; padding:10px 12px; background:var(--color-bg-0); border-radius:6px;">
             · 원본 PT 계약은 그대로 유지되며, <strong>오늘 날짜로 신규 PT 행이 추가</strong>됩니다.<br>
-            · 추가금만 오늘 매출로 잡히고, 기존 진행된 수업/회차 표시에는 영향이 없습니다.<br>
-            · PT관리앱(잔여횟수/매출)도 자동으로 동기화됩니다.
+            · 매출 = 회원 실 결제액 (1:1 일치). 차액 단가가 자동 계산되며, <strong>합산 가중평균이 회원 안내가와 일치</strong>합니다.<br>
+            · PT관리앱(잔여횟수/매출/가중평균)도 자동으로 동기화됩니다.
           </div>
 
           <div class="form-actions">
@@ -312,49 +315,48 @@ const PtTab = (() => {
       `,
       onOpen: (el) => {
         const addCountInput = el.querySelector('#upg-add-count');
-        const newPriceInput = el.querySelector('#upg-new-price');
-        const contractAmountEl = el.querySelector('#upg-contract-amount');
-        const totalPaymentEl = el.querySelector('#upg-total-payment');
+        const newPkgPriceInput = el.querySelector('#upg-new-pkg-price');
         const cashInput = el.querySelector('#upg-cash');
         const cardInput = el.querySelector('#upg-card');
+        const netCalcEl = el.querySelector('#upg-net-calc');
+        const effPriceEl = el.querySelector('#upg-eff-price');
+        const weightedAvgEl = el.querySelector('#upg-weighted-avg');
+        const warnEl = el.querySelector('#upg-warn');
 
-        // 신규 단가 default — 기존 단가 prefill (사용자 변경 가능)
-        newPriceInput.value = prevPrice;
-
-        let currentTotal = 0;
         function updateCalc() {
-          const count = parseInt(addCountInput.value) || 0;
-          const price = parseInt(newPriceInput.value) || 0;
-          const contract = count * price;
-          currentTotal = Math.round(contract * 1.1);
-          contractAmountEl.value = contract.toLocaleString() + '원';
-          totalPaymentEl.value = currentTotal.toLocaleString() + '원';
-          const placeholderText = currentTotal > 0 ? currentTotal.toLocaleString() : '0';
-          cashInput.placeholder = placeholderText;
-          cardInput.placeholder = placeholderText;
-        }
-        addCountInput.addEventListener('input', updateCalc);
-        newPriceInput.addEventListener('input', updateCalc);
-        updateCalc();
+          const addCount = parseInt(addCountInput.value) || 0;
+          const cash = parseInt(cashInput.value) || 0;
+          const card = parseInt(cardInput.value) || 0;
+          const paidVatIncl = cash + card;                           // VAT 포함 결제 (회원이 실제 낸 돈)
+          const paidNet = paidVatIncl > 0 ? Math.round(paidVatIncl / 1.1) : 0;  // VAT 제외 차액
+          const effPrice = (addCount > 0 && paidNet > 0) ? Math.round(paidNet / addCount) : 0;
 
-        // 한쪽 입력하면 다른쪽 자동 채움
-        let autoFilling = false;
-        cashInput.addEventListener('input', () => {
-          if (autoFilling) return;
-          const cash = parseInt(cashInput.value);
-          if (isNaN(cash) || currentTotal <= 0) return;
-          autoFilling = true;
-          cardInput.value = Math.max(0, currentTotal - cash);
-          autoFilling = false;
-        });
-        cardInput.addEventListener('input', () => {
-          if (autoFilling) return;
-          const card = parseInt(cardInput.value);
-          if (isNaN(card) || currentTotal <= 0) return;
-          autoFilling = true;
-          cashInput.value = Math.max(0, currentTotal - card);
-          autoFilling = false;
-        });
+          // 합산 가중평균 (VAT 제외) = (원본 결제 net + 차액 net) / (원본 회수 + 추가 회수)
+          //   원본 결제 net = prevPrice × prevCount (= contract_amount)
+          const prevNet = prevPrice * prevCount;
+          const totalNet = prevNet + paidNet;
+          const totalCount = prevCount + addCount;
+          const weightedAvg = totalCount > 0 ? Math.round(totalNet / totalCount) : 0;
+
+          netCalcEl.textContent = paidNet.toLocaleString() + '원';
+          effPriceEl.textContent = effPrice.toLocaleString() + '원';
+          weightedAvgEl.textContent = weightedAvg.toLocaleString() + '원';
+
+          // 안내가(new_package_price) 입력 시 비교 경고
+          const pkgPrice = parseInt(newPkgPriceInput.value) || 0;
+          if (pkgPrice > 0 && weightedAvg > 0 && Math.abs(pkgPrice - weightedAvg) > 100) {
+            warnEl.style.display = '';
+            warnEl.textContent = `⚠ 합산 가중평균(${weightedAvg.toLocaleString()}원)이 안내가(${pkgPrice.toLocaleString()}원)와 다릅니다. 결제 금액을 확인하세요.`;
+          } else {
+            warnEl.style.display = 'none';
+          }
+        }
+
+        addCountInput.addEventListener('input', updateCalc);
+        newPkgPriceInput.addEventListener('input', updateCalc);
+        cashInput.addEventListener('input', updateCalc);
+        cardInput.addEventListener('input', updateCalc);
+        updateCalc();
 
         // 폼 제출
         el.querySelector('#pt-upgrade-form').addEventListener('submit', async (e) => {
@@ -370,16 +372,19 @@ const PtTab = (() => {
   async function submitPtUpgrade(form, rec) {
     const fd = new FormData(form);
     const addCount = parseInt(fd.get('add_count'));
-    const newPrice = parseInt(fd.get('new_session_price'));
     if (!addCount || addCount < 1) { Toast.warning('추가 회수를 입력해주세요.'); return; }
-    if (isNaN(newPrice) || newPrice < 0) { Toast.warning('신규 단가를 입력해주세요.'); return; }
 
     let cash = parseInt(fd.get('paid_cash')) || 0;
     let card = parseInt(fd.get('paid_card')) || 0;
-    const totalPay = Math.round(addCount * newPrice * 1.1);
-    if (cash === 0 && card === 0 && totalPay > 0) {
-      card = totalPay;  // 둘 다 비었으면 전액 카드
-    }
+    const paidVatIncl = cash + card;
+    if (paidVatIncl <= 0) { Toast.warning('차액 결제 금액을 입력해주세요 (현금 또는 카드).'); return; }
+
+    // 옵션 A: 차액 자동 계산 단가
+    //   세션 단가 (VAT 제외) = (결제 / 1.1) / 회수
+    //   contract_amount = pt_count × session_price = 차액(VAT 제외) ✓ 결제와 일치
+    //   가중평균 = (원본 + 차액) / 총회수 = 회원 안내 패키지 단가
+    const paidNet = Math.round(paidVatIncl / 1.1);
+    const effSessionPrice = Math.round(paidNet / addCount);
 
     const assignedTrainerId = fd.get('assigned_trainer_id') || null;
     const contractTrainerId = fd.get('contract_trainer_id') || null;
@@ -392,7 +397,7 @@ const PtTab = (() => {
     const { data, error } = await supabase.rpc('pt_upgrade', {
       p_prev_pt_registration_id: rec.id,
       p_add_count: addCount,
-      p_new_session_price: newPrice,
+      p_new_session_price: effSessionPrice,  // 옵션 A: 차액 자동 계산 단가
       p_paid_cash: cash,
       p_paid_card: card,
       p_assigned_trainer_id: assignedTrainerId,
