@@ -463,14 +463,15 @@ const PtTab = (() => {
     }
 
     // v12: 이미 동기화 / 중복 / 신규 성공 / 실패 4가지 분기
+    // v14: 중복/이미동기화 케이스를 info(파란색)으로 통일 — '실패'로 오인되지 않게
     if (data?.ok && data?.duplicate === true) {
-      Toast.warning(data.note || 'VeraGym 에 이미 등록된 PT 입니다. 동기화를 생략했습니다.');
+      Toast.info('이미 PT관리앱에 등록되어 있습니다 (중복 방지로 스킵). [동기화 완료] 상태로 변경되어 더 이상 동기화 시도하지 않습니다.');
     } else if (data?.ok && data?.already === true) {
-      Toast.info(data.note || '이미 동기화된 PT 등록입니다.');
+      Toast.info('이미 동기화 처리된 PT 등록입니다.');
     } else if (data?.ok) {
-      Toast.success('동기화 성공');
+      Toast.success('동기화 성공 — PT관리앱에 등록되었습니다');
     } else {
-      Toast.warning('동기화 실패: ' + (data?.error || '알 수 없는 오류'));
+      Toast.error('동기화 실패: ' + (data?.error || '알 수 없는 오류'));
     }
 
     await loadPtRegistrations();
