@@ -698,7 +698,7 @@ const InquiryTab = (() => {
             if (insErr) {
               Toast.error('발송 예약 실패: ' + insErr.message);
             } else {
-              Toast.success('문자 발송 예약 완료 — 잠시 후 전송됩니다');
+              Toast.success('문자 발송 예약 완료 — 약 1분 뒤 전송됩니다');
               Modal.close();
             }
           } catch (err) {
