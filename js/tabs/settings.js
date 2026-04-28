@@ -35,6 +35,7 @@ const SettingsTab = (() => {
   const SMS_TPL_CATEGORIES = [
     { value: 'registration', label: '회원권 등록' },
     { value: 'pt',           label: 'PT 등록' },
+    { value: 'expiry',       label: '만료 안내' },
     { value: 'inquiry',      label: '문의 응대' },
     { value: 'spt',          label: 'SPT 안내' },
     { value: 'general',      label: '일반/이벤트' },
@@ -625,7 +626,7 @@ const SettingsTab = (() => {
     const onceMark = tpl.send_once
       ? `<span class="opt-usage-badge" style="background:#FEE2E2;color:#B91C1C;">1회 한정</span>` : '';
     const autoMark = tpl.auto_send
-      ? `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">⚡ 자동 +${tpl.delay_days || 1}일</span>` : '';
+      ? `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">자동 +${tpl.delay_days || 1}일</span>` : '';
     const catLabel = (SMS_TPL_CATEGORIES.find(c => c.value === tpl.category) || {}).label || tpl.category || '';
     const msgPreview = (tpl.msg || '').replace(/\n/g, ' ').slice(0, 60) + ((tpl.msg || '').length > 60 ? '…' : '');
     return `
@@ -705,11 +706,11 @@ const SettingsTab = (() => {
           </label>
         </div>
         <div class="form-group" id="tpl-auto-section">
-          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:#EFF6FF; border-radius:8px; border:1px solid #93C5FD;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; border:1px solid var(--color-border);">
             <input type="checkbox" name="auto_send" id="tpl-auto-check" ${t.auto_send ? 'checked' : ''}
               ${autoEligible ? '' : 'disabled'}
-              style="width:18px; height:18px; flex-shrink:0; accent-color:#1E40AF; margin:0;">
-            <span style="font-size:14px;"><strong>⚡ 자동 발송</strong> — 회원권/PT 등록 후 자동으로 발송</span>
+              style="width:18px; height:18px; flex-shrink:0; accent-color:var(--color-primary, #F97316); margin:0;">
+            <span style="font-size:14px;"><strong>자동 발송</strong> — 회원권/PT 등록 후 자동으로 발송</span>
           </label>
           <div id="tpl-delay-row" style="margin-top:10px; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; ${t.auto_send ? '' : 'opacity:0.5;'}">
             <label style="display:flex; align-items:center; gap:8px; font-size:14px;">

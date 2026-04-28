@@ -139,7 +139,7 @@ async function autoScheduleSmsForRegistration(record, triggerCategory, relatedTa
     }
     if (typeof Toast !== 'undefined') {
       const names = tpls.map(t => `${t.name} (+${t.delay_days}일)`).join(', ');
-      Toast.info(`📱 자동 문자 예약: ${names}`);
+      Toast.info(`자동 문자 예약: ${names}`);
     }
   } catch (e) {
     console.warn('[auto-sms] exception:', e);

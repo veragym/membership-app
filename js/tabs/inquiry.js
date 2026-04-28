@@ -672,39 +672,38 @@ const InquiryTab = (() => {
           sendBtn.textContent = '발송 중...';
 
           try {
-            const { data: session } = await supabase.auth.getSession();
-            const jwt = session?.session?.access_token;
-            if (!jwt) throw new Error('로그인 세션이 없습니다');
+            // SMS_DISABLED 차단 플래그 확인
+            const { data: dis } = await supabase
+              .from('app_secrets').select('value').eq('key', 'SMS_DISABLED').maybeSingle();
+            if (dis?.value === '1') {
+              Toast.warning('현재 문자 발송이 일시 중지된 상태입니다 (관리자 설정)');
+              return;
+            }
 
-            const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${jwt}`,
-                'apikey': SUPABASE_ANON_KEY,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                receiver: inq.phone,
-                receiver_name: inq.name,
-                msg: finalMsg,
-                msg_type: tpl?.msg_type && tpl.msg_type !== 'auto' ? tpl.msg_type : 'auto',
-                title: tpl?.title || null,
-                template_id: tpl?.id || null,
-                related_table: 'inquiries',
-                related_id: inq.id,
-              }),
-            });
-            const json = await res.json();
+            // sms_scheduled 큐에 즉시 발송 대상으로 INSERT
+            // (due_at = NOW() → 매장 PC 가 폴링하여 Aligo 로 발송)
+            const { error: insErr } = await supabase.from('sms_scheduled').insert([{
+              template_id: tpl?.id || null,
+              related_table: 'inquiries',
+              related_id: inq.id,
+              receiver: String(inq.phone || '').replace(/\D/g, ''),
+              receiver_name: inq.name || null,
+              msg: finalMsg,
+              msg_type: tpl?.msg_type && tpl.msg_type !== 'auto' ? tpl.msg_type : 'auto',
+              title: tpl?.title || null,
+              due_at: new Date().toISOString(),
+              status: 'pending',
+            }]);
 
-            if (json.ok) {
-              Toast.success('문자 발송 성공');
-              Modal.close();
+            if (insErr) {
+              Toast.error('발송 예약 실패: ' + insErr.message);
             } else {
-              Toast.error('발송 실패: ' + (json.error || json.message || `HTTP ${res.status}`));
+              Toast.success('문자 발송 예약 완료 — 잠시 후 전송됩니다');
+              Modal.close();
             }
           } catch (err) {
-            console.error('[sms] 발송 실패:', err);
-            Toast.error('발송 실패: ' + (err.message || err));
+            console.error('[sms] 발송 예약 실패:', err);
+            Toast.error('발송 예약 실패: ' + (err.message || err));
           } finally {
             sendBtn.disabled = false;
             sendBtn.textContent = '발송하기';
