@@ -87,14 +87,29 @@ async function autoScheduleSmsForRegistration(record, triggerCategory, relatedTa
   } catch (e) { /* 조회 실패 시 그대로 진행 */ }
 
   try {
-    const { data: tpls } = await supabase
+    // v15: 신규/재등록 sub-filter 매칭
+    //   · template.registration_category = NULL → 둘 다 매칭
+    //   · '신규' → 신규 가입자만, '재등록' → 재등록자만
+    //   · record.category 가 '신규' 또는 '재등록' 일 때만 sub-filter 동작
+    let query = supabase
       .from('sms_templates')
-      .select('id, name, msg, msg_type, title, send_once, delay_days')
+      .select('id, name, msg, msg_type, title, send_once, delay_days, registration_category')
       .eq('auto_send', true)
       .eq('is_active', true)
       .eq('category', triggerCategory);
 
-    if (!tpls || tpls.length === 0) return;
+    const { data: rawTpls } = await query;
+    if (!rawTpls || rawTpls.length === 0) return;
+
+    // 신규/재등록 필터링 (클라이언트 측 — PostgREST OR 쿼리 복잡성 회피)
+    const recCat = record.category;  // '신규' / '재등록' / null
+    const tpls = rawTpls.filter(t => {
+      if (!t.registration_category) return true;          // NULL → 둘 다 매칭
+      if (!recCat) return true;                            // record 에 카테고리 정보 없으면 NULL과 동일하게 매칭
+      return t.registration_category === recCat;          // 명시적 매칭
+    });
+
+    if (tpls.length === 0) return;
 
     // 변수 치환 컨텍스트
     const ctx = {

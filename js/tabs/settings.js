@@ -589,7 +589,7 @@ const SettingsTab = (() => {
     const listEl = document.getElementById('settings-option-list');
     const { data, error } = await supabase
       .from('sms_templates')
-      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active, auto_send, delay_days')
+      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active, auto_send, delay_days, registration_category')
       .order('is_active', { ascending: false })
       .order('sort_order', { ascending: true });
     if (error) {
@@ -634,7 +634,7 @@ const SettingsTab = (() => {
     const onceMark = tpl.send_once
       ? `<span class="opt-usage-badge" style="background:#FEE2E2;color:#B91C1C;">1회 한정</span>` : '';
     const autoMark = tpl.auto_send
-      ? `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">자동 +${tpl.delay_days || 1}일</span>` : '';
+      ? `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">자동 +${tpl.delay_days || 1}일${tpl.registration_category ? ' · ' + tpl.registration_category : ''}</span>` : '';
     const catLabel = (SMS_TPL_CATEGORIES.find(c => c.value === tpl.category) || {}).label || tpl.category || '';
     const msgPreview = (tpl.msg || '').replace(/\n/g, ' ').slice(0, 60) + ((tpl.msg || '').length > 60 ? '…' : '');
     return `
@@ -683,11 +683,12 @@ const SettingsTab = (() => {
 
   function buildTemplateForm(tpl) {
     const isEdit = !!tpl;
-    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '', auto_send: false, delay_days: 1 };
+    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '', auto_send: false, delay_days: 1, registration_category: null };
     const catOptions = SMS_TPL_CATEGORIES.map(c =>
       `<option value="${c.value}" ${c.value === t.category ? 'selected' : ''}>${c.label}</option>`
     ).join('');
     const autoEligible = t.category === 'registration' || t.category === 'pt';
+    const regCat = t.registration_category;  // '신규' / '재등록' / null
     return `
       <form id="tpl-form">
         <div class="form-group">
@@ -728,6 +729,16 @@ const SettingsTab = (() => {
                 style="width:80px; padding:6px 10px; font-size:14px;" required>
               <span>일 후 <strong>오전 10시</strong>에 자동 발송</span>
             </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin-top:10px;">
+              <span style="white-space:nowrap;">대상</span>
+              <select name="registration_category" id="tpl-reg-category"
+                ${(t.auto_send && autoEligible) ? '' : 'disabled'}
+                style="padding:6px 10px; font-size:14px;">
+                <option value="" ${!regCat ? 'selected' : ''}>신규 + 재등록 (둘 다)</option>
+                <option value="신규" ${regCat === '신규' ? 'selected' : ''}>신규 가입자만</option>
+                <option value="재등록" ${regCat === '재등록' ? 'selected' : ''}>재등록자만</option>
+              </select>
+            </label>
             <div style="margin-top:6px; font-size:12px; color:var(--color-text-secondary, #6b7280);">
               · 1회만 발송됩니다 (중복 발송 없음)<br>
               · 휴무일 등으로 발송이 누락된 경우 다음 영업일에 자동 보충됩니다
@@ -748,6 +759,7 @@ const SettingsTab = (() => {
     const autoCheck = el.querySelector('#tpl-auto-check');
     const delayRow = el.querySelector('#tpl-delay-row');
     const delayInput = el.querySelector('#tpl-delay-input');
+    const regCatSel = el.querySelector('#tpl-reg-category');
     if (!catSel || !autoCheck || !delayRow || !delayInput) return;
 
     const update = () => {
@@ -757,6 +769,7 @@ const SettingsTab = (() => {
       if (!eligible) autoCheck.checked = false;
       const on = autoCheck.checked && eligible;
       delayInput.disabled = !on;
+      if (regCatSel) regCatSel.disabled = !on;
       delayRow.style.opacity = on ? '1' : '0.5';
     };
 
@@ -770,6 +783,10 @@ const SettingsTab = (() => {
     const autoEligible = category === 'registration' || category === 'pt';
     const autoSend = autoEligible && fd.get('auto_send') === 'on';
     const delayDays = autoSend ? Math.max(1, parseInt(fd.get('delay_days'), 10) || 1) : 1;
+    // v15: registration_category — 자동 발송 + autoEligible 일 때만 의미. 빈 값이면 NULL (둘 다)
+    const regCatRaw = (fd.get('registration_category') || '').trim();
+    const registrationCategory = (autoSend && (regCatRaw === '신규' || regCatRaw === '재등록'))
+      ? regCatRaw : null;
     return {
       name: fd.get('name').trim(),
       category,
@@ -777,6 +794,7 @@ const SettingsTab = (() => {
       send_once: fd.get('send_once') === 'on',
       auto_send: autoSend,
       delay_days: delayDays,
+      registration_category: registrationCategory,
     };
   }
 

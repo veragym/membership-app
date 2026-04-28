@@ -840,6 +840,7 @@ const PtTab = (() => {
     Toast.success(`PT${submitLabel} 저장 완료`);
 
     // 신규 PT 등록 시 자동 SMS 예약 (PT 카테고리 + auto_send=true 매칭 템플릿)
+    // v15: category 전달 — 신규/재등록 sub-filter 매칭
     if (!isEdit && newPtId) {
       autoScheduleSmsForRegistration({
         id: newPtId,
@@ -848,6 +849,7 @@ const PtTab = (() => {
         contract_date: payload.contract_date,
         pt_count: payload.pt_count,
         product: payload.product || null,
+        category: fd.get('category') || null,
       }, 'pt', 'pt_registrations');
     }
 

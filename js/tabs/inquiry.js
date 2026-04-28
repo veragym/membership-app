@@ -1089,7 +1089,7 @@ const InquiryTab = (() => {
       }
       Toast.success('문의 + 회원권 등록 완료');
 
-      // 자동 SMS 예약
+      // 자동 SMS 예약 (v15: category 전달 — 신규/재등록 분기)
       autoScheduleSmsForRegistration({
         id: newInquiryId,
         name: payload.name,
@@ -1098,6 +1098,7 @@ const InquiryTab = (() => {
         registered_date: regPayload.registered_date,
         product: regPayload.product,
         spt_count: regPayload.spt_count,
+        category: regPayload.category || payload.category || null,
       }, 'registration', 'inquiries');
 
       Modal.close();
@@ -1283,6 +1284,7 @@ const InquiryTab = (() => {
     Toast.success('회원권 등록 완료');
 
     // 자동 SMS 예약 (회원권 등록 카테고리 + auto_send=true 매칭 템플릿)
+    // v15: category 전달 — 신규/재등록 sub-filter 매칭
     autoScheduleSmsForRegistration({
       id: inquiry.id,
       name: inquiry.name,
@@ -1291,6 +1293,7 @@ const InquiryTab = (() => {
       registered_date: payload.registered_date,
       product: payload.product,
       spt_count: payload.spt_count,
+      category: payload.category || inquiry.category || null,
     }, 'registration', 'inquiries');
 
     Modal.close();
