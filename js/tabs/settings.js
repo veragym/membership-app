@@ -611,10 +611,18 @@ const SettingsTab = (() => {
     const inactive = _smsTemplates.filter(t => !t.is_active);
 
     listEl.innerHTML = `
-      ${active.length ? `<div class="settings-option-group-label">활성 (${active.length})</div>` : ''}
-      <div class="settings-option-items">${active.map((t, i) => renderSmsTemplateItem(t, i, active.length)).join('')}</div>
-      ${inactive.length ? `<div class="settings-option-group-label">비활성 (${inactive.length})</div>
-        <div class="settings-option-items">${inactive.map(t => renderSmsTemplateItem(t, null, 0)).join('')}</div>` : ''}
+      ${active.length ? `
+        <div class="settings-option-section">
+          <div class="settings-section-title">활성 (${active.length})</div>
+          <div class="settings-option-items">${active.map((t, i) => renderSmsTemplateItem(t, i, active.length)).join('')}</div>
+        </div>
+      ` : ''}
+      ${inactive.length ? `
+        <div class="settings-option-section">
+          <div class="settings-section-title inactive">비활성 (${inactive.length})</div>
+          <div class="settings-option-items">${inactive.map(t => renderSmsTemplateItem(t, null, 0)).join('')}</div>
+        </div>
+      ` : ''}
     `;
     bindSmsTemplateEvents();
   }
