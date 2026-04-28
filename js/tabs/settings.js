@@ -718,8 +718,12 @@ const SettingsTab = (() => {
               <input type="number" name="delay_days" id="tpl-delay-input" min="1" max="365" value="${t.delay_days || 1}"
                 ${(t.auto_send && autoEligible) ? '' : 'disabled'}
                 style="width:80px; padding:6px 10px; font-size:14px;" required>
-              <span>일 후 매일 <strong>10:00 KST</strong>에 자동 발송</span>
+              <span>일 후 <strong>오전 10시</strong>에 자동 발송</span>
             </label>
+            <div style="margin-top:6px; font-size:12px; color:var(--color-text-secondary, #6b7280);">
+              · 1회만 발송됩니다 (중복 발송 없음)<br>
+              · 휴무일 등으로 발송이 누락된 경우 다음 영업일에 자동 보충됩니다
+            </div>
           </div>
         </div>
         <div class="form-actions">
