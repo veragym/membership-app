@@ -147,11 +147,15 @@ const PtTab = (() => {
       const nameHasTail = /\d{4}$/.test(r.name || '');
       const nameLabel = (nameHasTail || !phoneTail4) ? (r.name || '') : `${r.name}${phoneTail4}`;
 
+      // v14: 업그레이드 배지 — pt_upgrade RPC 로 INSERT 된 행 식별
+      const upgradeBadge = r.is_upgrade
+        ? `<span class="pt-upgrade-badge" title="업그레이드 행">UP</span>` : '';
+
       return `
-        <div class="inquiry-card pt-row">
+        <div class="inquiry-card pt-row${r.is_upgrade ? ' pt-row-upgrade' : ''}">
           <div class="inquiry-card-main">
             <div class="col-date">${esc(r.contract_date || '')}</div>
-            <div class="col-name">${esc(nameLabel)}</div>
+            <div class="col-name">${upgradeBadge}${esc(nameLabel)}</div>
             <div class="col-phone">${esc(r.phone)}</div>
             <div class="col-pt-count">${esc(r.pt_count)}회</div>
             <div class="col-amount">${amount}원</div>
@@ -163,6 +167,7 @@ const PtTab = (() => {
                 ? `<button class="btn-action btn-sync-done" data-id="${r.id}" title="이미 동기화됨">동기화 완료</button>`
                 : `<button class="btn-action btn-retry" data-id="${r.id}">동기화</button>`}
               <button class="btn-action btn-edit" data-id="${r.id}">수정</button>
+              <button class="btn-action btn-upgrade" data-id="${r.id}" title="회수 추가 / 단가 변경 / 트레이너 변경">업그레이드</button>
             </div>
           </div>
         </div>
@@ -210,6 +215,213 @@ const PtTab = (() => {
         if (rec) openPtForm(null, rec);
       });
     });
+
+    // v14: 업그레이드 버튼 바인딩 — 회수 추가/단가 변경/트레이너 변경
+    listEl.querySelectorAll('.btn-upgrade').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rec = allPtRegs.find(r => r.id === btn.dataset.id);
+        if (rec) openPtUpgradeForm(rec);
+      });
+    });
+  }
+
+  // ────────── PT 업그레이드 모달 (v14) ──────────
+  // 회수 추가 + 단가 변경 + 트레이너 변경을 한 트랜잭션으로 처리
+  // pt_upgrade RPC 가 pt_registrations / pt_products / payment_records / pt_upgrade_history 4개 테이블 갱신
+  async function openPtUpgradeForm(rec) {
+    if (trainers.length === 0) await loadTrainers();
+
+    const phoneTail = rec.phone ? String(rec.phone).replace(/\D/g, '').slice(-4) : '';
+    const nameHasTail = /\d{4}$/.test(rec.name || '');
+    const nameLabel = (nameHasTail || !phoneTail) ? (rec.name || '') : `${rec.name}${phoneTail}`;
+
+    const prevPrice = rec.session_price || 0;
+    const prevCount = rec.pt_count || 0;
+    const prevAmount = (rec.contract_amount || prevPrice * prevCount).toLocaleString();
+
+    Modal.open({
+      type: 'center',
+      title: 'PT 업그레이드',
+      size: 'lg',
+      html: `
+        <form id="pt-upgrade-form">
+          <div class="pt-upgrade-info" style="padding:12px 14px; background:var(--color-bg-1); border-radius:8px; margin-bottom:14px; font-size:13px; line-height:1.7;">
+            <div><strong>회원</strong> ${escHtml(nameLabel)} · ${escHtml(rec.phone || '')}</div>
+            <div><strong>원본 계약</strong> ${escHtml(rec.contract_date || '')} · ${prevCount}회 · ${prevPrice.toLocaleString()}원/회 · ${prevAmount}원</div>
+          </div>
+
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group">
+              <label>추가 회수 *</label>
+              <input type="number" name="add_count" id="upg-add-count" min="1" placeholder="예: 5" required>
+            </div>
+            <div class="form-group">
+              <label>신규 세션 단가 *</label>
+              <input type="number" name="new_session_price" id="upg-new-price" min="0" placeholder="${prevPrice.toLocaleString()}" required>
+              <div class="form-hint" style="font-size:11px; color:var(--color-text-muted); margin-top:4px;">기존: ${prevPrice.toLocaleString()}원/회</div>
+            </div>
+            <div class="form-group">
+              <label>추가 금액 (자동)</label>
+              <input type="text" id="upg-contract-amount" readonly disabled value="0원" style="background:var(--color-bg-2); font-weight:600;">
+            </div>
+            <div class="form-group">
+              <label>총 결제액 (VAT 10%, 자동)</label>
+              <input type="text" id="upg-total-payment" readonly disabled value="0원" style="background:var(--color-bg-2); font-weight:600;">
+            </div>
+            <div class="form-group">
+              <label>현금/계좌</label>
+              <input type="number" name="paid_cash" id="upg-cash" min="0" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label>카드</label>
+              <input type="number" name="paid_card" id="upg-card" min="0" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label>매출담당 (변경 시 선택)</label>
+              <select name="assigned_trainer_id" class="form-select">
+                <option value="">기존 유지${rec.assigned_trainer?.name ? ' — ' + rec.assigned_trainer.name : ''}</option>
+                ${trainers.filter(t => t.is_active).map(t =>
+                  `<option value="${t.id}">${escHtml(t.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>계약담당 (변경 시 선택)</label>
+              <select name="contract_trainer_id" class="form-select">
+                <option value="">기존 유지${rec.contract_trainer?.name ? ' — ' + rec.contract_trainer.name : ''}</option>
+                ${trainers.filter(t => t.is_active).map(t =>
+                  `<option value="${t.id}">${escHtml(t.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>메모 (업그레이드 사유 등)</label>
+              <input type="text" name="note" placeholder="예: 회원 요청, 패키지 전환 등" maxlength="500">
+            </div>
+          </div>
+
+          <div class="form-hint" style="font-size:12px; color:var(--color-text-secondary); margin:8px 0 12px; padding:10px 12px; background:var(--color-bg-0); border-radius:6px;">
+            · 원본 PT 계약은 그대로 유지되며, <strong>오늘 날짜로 신규 PT 행이 추가</strong>됩니다.<br>
+            · 추가금만 오늘 매출로 잡히고, 기존 진행된 수업/회차 표시에는 영향이 없습니다.<br>
+            · PT관리앱(잔여횟수/매출)도 자동으로 동기화됩니다.
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="Modal.close()">취소</button>
+            <button type="submit" class="btn btn-primary">업그레이드 실행</button>
+          </div>
+        </form>
+      `,
+      onOpen: (el) => {
+        const addCountInput = el.querySelector('#upg-add-count');
+        const newPriceInput = el.querySelector('#upg-new-price');
+        const contractAmountEl = el.querySelector('#upg-contract-amount');
+        const totalPaymentEl = el.querySelector('#upg-total-payment');
+        const cashInput = el.querySelector('#upg-cash');
+        const cardInput = el.querySelector('#upg-card');
+
+        // 신규 단가 default — 기존 단가 prefill (사용자 변경 가능)
+        newPriceInput.value = prevPrice;
+
+        let currentTotal = 0;
+        function updateCalc() {
+          const count = parseInt(addCountInput.value) || 0;
+          const price = parseInt(newPriceInput.value) || 0;
+          const contract = count * price;
+          currentTotal = Math.round(contract * 1.1);
+          contractAmountEl.value = contract.toLocaleString() + '원';
+          totalPaymentEl.value = currentTotal.toLocaleString() + '원';
+          const placeholderText = currentTotal > 0 ? currentTotal.toLocaleString() : '0';
+          cashInput.placeholder = placeholderText;
+          cardInput.placeholder = placeholderText;
+        }
+        addCountInput.addEventListener('input', updateCalc);
+        newPriceInput.addEventListener('input', updateCalc);
+        updateCalc();
+
+        // 한쪽 입력하면 다른쪽 자동 채움
+        let autoFilling = false;
+        cashInput.addEventListener('input', () => {
+          if (autoFilling) return;
+          const cash = parseInt(cashInput.value);
+          if (isNaN(cash) || currentTotal <= 0) return;
+          autoFilling = true;
+          cardInput.value = Math.max(0, currentTotal - cash);
+          autoFilling = false;
+        });
+        cardInput.addEventListener('input', () => {
+          if (autoFilling) return;
+          const card = parseInt(cardInput.value);
+          if (isNaN(card) || currentTotal <= 0) return;
+          autoFilling = true;
+          cashInput.value = Math.max(0, currentTotal - card);
+          autoFilling = false;
+        });
+
+        // 폼 제출
+        el.querySelector('#pt-upgrade-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await submitPtUpgrade(e.target, rec);
+        });
+
+        addCountInput.focus();
+      }
+    });
+  }
+
+  async function submitPtUpgrade(form, rec) {
+    const fd = new FormData(form);
+    const addCount = parseInt(fd.get('add_count'));
+    const newPrice = parseInt(fd.get('new_session_price'));
+    if (!addCount || addCount < 1) { Toast.warning('추가 회수를 입력해주세요.'); return; }
+    if (isNaN(newPrice) || newPrice < 0) { Toast.warning('신규 단가를 입력해주세요.'); return; }
+
+    let cash = parseInt(fd.get('paid_cash')) || 0;
+    let card = parseInt(fd.get('paid_card')) || 0;
+    const totalPay = Math.round(addCount * newPrice * 1.1);
+    if (cash === 0 && card === 0 && totalPay > 0) {
+      card = totalPay;  // 둘 다 비었으면 전액 카드
+    }
+
+    const assignedTrainerId = fd.get('assigned_trainer_id') || null;
+    const contractTrainerId = fd.get('contract_trainer_id') || null;
+    const note = (fd.get('note') || '').trim() || null;
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> 업그레이드 처리 중...';
+
+    const { data, error } = await supabase.rpc('pt_upgrade', {
+      p_prev_pt_registration_id: rec.id,
+      p_add_count: addCount,
+      p_new_session_price: newPrice,
+      p_paid_cash: cash,
+      p_paid_card: card,
+      p_assigned_trainer_id: assignedTrainerId,
+      p_contract_trainer_id: contractTrainerId,
+      p_note: note,
+    });
+
+    if (error) {
+      Toast.error('업그레이드 실패: ' + error.message);
+      submitBtn.disabled = false;
+      submitBtn.textContent = '업그레이드 실행';
+      return;
+    }
+    if (!data?.ok) {
+      Toast.error('업그레이드 실패: ' + (data?.error || 'unknown'));
+      submitBtn.disabled = false;
+      submitBtn.textContent = '업그레이드 실행';
+      return;
+    }
+
+    if (data.member_matched) {
+      Toast.success(`업그레이드 완료 — PT관리앱 동기화 ${data.member_matched ? '✓' : '○'}`);
+    } else {
+      Toast.warning('업그레이드 저장됨. 단, members 매칭 실패로 PT관리앱(잔여횟수/매출)에는 반영되지 않았습니다.');
+    }
+
+    // 업그레이드는 자동 SMS 스킵 — pt_upgrade RPC 가 직접 INSERT 하며 autoScheduleSmsForRegistration 호출 안 함
+    Modal.close();
+    await loadPtRegistrations();
   }
 
   // ────────── PT 등록 삭제 ──────────

@@ -266,14 +266,14 @@ const StatsTab = (() => {
       <table class="stats-staff-table">
         <thead><tr>
           <th>${headLabel}</th>
-          <th>건수</th>
+          <th>계약건수</th>
           <th>${amtLabel}</th>
           <th>${avgHead}</th>
         </tr></thead>
         <tbody>${sorted.map(([name,v])=>`
           <tr>
             <td>${escHtml(name)}</td>
-            <td class="stats-staff-count">${v.count}건</td>
+            <td class="stats-staff-count" title="계약(또는 업그레이드) 행 기준. 회원수와 다를 수 있음">${v.count}건</td>
             <td class="stats-staff-amount">${fmt(v.amount)}</td>
             <td class="stats-staff-amount stats-staff-avg-cell">${avgCell(v.amount)}</td>
           </tr>`).join('')}</tbody>
