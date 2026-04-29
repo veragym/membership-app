@@ -34,8 +34,11 @@ const PtTab = (() => {
     pane.innerHTML = `
       <div class="inquiry-toolbar">
         <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
+        <div style="flex:1;"></div>
         <div class="inquiry-toolbar-actions">
           <span id="pt-sync-badge"></span>
+          <span class="inquiry-filter-count" id="pt-filter-count" style="display:none;"></span>
+          <button class="btn btn-secondary btn-chip-sized" id="btn-pt-clear-filters" style="display:none;">필터 초기화</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-pt-excel-export">엑셀 내보내기</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-pt-excel-import">엑셀 업로드</button>
           <button class="btn btn-primary btn-chip-sized" id="btn-add-pt">+ PT등록</button>
@@ -54,6 +57,87 @@ const PtTab = (() => {
     pane.querySelector('#btn-pt-excel-import').addEventListener('click', () => {
       if (typeof ExcelImport !== 'undefined') ExcelImport.open();
     });
+    pane.querySelector('#btn-pt-clear-filters').addEventListener('click', () => {
+      ColumnFilter.clearAll('pt');
+      displayLimit = PAGE_SIZE;
+      renderList(document.querySelector('#tab-pt .search-box')?.value.trim() || '');
+    });
+  }
+
+  // ─── 컬럼 필터 (v15) ──────────────────────────────────
+  function _columnFilterConfig() {
+    return {
+      contract_date: { type: 'date_range', getValue: r => r.contract_date || '' },
+      pt_count: { type: 'number_range', getValue: r => r.pt_count || 0 },
+      contract_amount: { type: 'number_range', getValue: r => r.contract_amount || 0 },
+      total_payment: { type: 'number_range', getValue: r => (r.total_payment_cash||0) + (r.total_payment_card||0) },
+      contract_trainer: { type: 'enum', getValue: r => r.contract_trainer?.name || '' },
+      assigned_trainer: { type: 'enum', getValue: r => r.assigned_trainer?.name || '' },
+    };
+  }
+
+  function _uniqueOptions(getValue) {
+    const counts = new Map();
+    allPtRegs.forEach(r => {
+      const v = getValue(r);
+      const key = v == null ? '' : String(v);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({
+        value,
+        label: value === '' ? '(없음)' : value,
+        count
+      }))
+      .sort((a, b) => {
+        if (a.value === '') return 1;
+        if (b.value === '') return -1;
+        return b.count - a.count;
+      });
+  }
+
+  function _attachColumnFilters(listEl) {
+    const cfg = _columnFilterConfig();
+    const labelMap = {
+      contract_date: '날짜',
+      pt_count: '횟수',
+      contract_amount: '계약금액',
+      total_payment: '총결제금액',
+      contract_trainer: '계약T',
+      assigned_trainer: '담당T',
+    };
+    listEl.querySelectorAll('[data-cf-key]').forEach(headerEl => {
+      const key = headerEl.dataset.cfKey;
+      const c = cfg[key];
+      if (!c) return;
+      ColumnFilter.attach(headerEl, {
+        tab: 'pt',
+        key,
+        type: c.type,
+        label: labelMap[key] || key,
+        getOptions: () => _uniqueOptions(c.getValue),
+        onChange: () => {
+          displayLimit = PAGE_SIZE;
+          renderList(document.querySelector('#tab-pt .search-box')?.value.trim() || '');
+        },
+      });
+    });
+  }
+
+  function _updateClearFiltersButton(filteredCount, totalCount) {
+    const btn = document.getElementById('btn-pt-clear-filters');
+    const countEl = document.getElementById('pt-filter-count');
+    if (!btn || !countEl) return;
+    const n = ColumnFilter.activeCount('pt');
+    if (n > 0) {
+      btn.style.display = '';
+      btn.textContent = `필터 초기화 (${n})`;
+      countEl.style.display = '';
+      countEl.innerHTML = `<strong>${(filteredCount ?? 0).toLocaleString()}</strong>건 일치 / 전체 <strong>${(totalCount ?? 0).toLocaleString()}</strong>건`;
+    } else {
+      btn.style.display = 'none';
+      countEl.style.display = 'none';
+    }
   }
 
   async function loadPtRegistrations() {
@@ -109,14 +193,23 @@ const PtTab = (() => {
       );
     }
 
+    // v15: 컬럼 필터 적용 (검색 결과에 추가 적용)
+    filtered = ColumnFilter.apply('pt', filtered, _columnFilterConfig());
+
+    const hasFilterOrSearch = !!query || ColumnFilter.activeCount('pt') > 0;
+
     if (filtered.length === 0) {
-      listEl.innerHTML = '<div class="empty-state">PT등록 내역이 없습니다.</div>';
+      const emptyMsg = ColumnFilter.activeCount('pt') > 0
+        ? '필터 조건에 맞는 PT등록이 없습니다.'
+        : 'PT등록 내역이 없습니다.';
+      listEl.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
+      _updateClearFiltersButton(0, allPtRegs.length);
       return;
     }
 
-    // v13: 검색 없을 땐 DOM 렌더 페이지네이션 (초기 100건)
+    // v13: 검색/필터 없을 땐 DOM 렌더 페이지네이션 (초기 100건)
     const totalCount = filtered.length;
-    const isPaged = !query;
+    const isPaged = !hasFilterOrSearch;
     if (isPaged) filtered = filtered.slice(0, displayLimit);
 
     // HTML escape 유틸
@@ -176,14 +269,14 @@ const PtTab = (() => {
 
     listEl.innerHTML = `
       <div class="pt-table-header">
-        <div>날짜</div>
+        <div data-cf-key="contract_date">날짜</div>
         <div>이름</div>
         <div>전화번호</div>
-        <div>횟수</div>
-        <div>계약금액</div>
-        <div>총결제금액</div>
-        <div>계약T</div>
-        <div>담당T</div>
+        <div data-cf-key="pt_count">횟수</div>
+        <div data-cf-key="contract_amount">계약금액</div>
+        <div data-cf-key="total_payment">총결제금액</div>
+        <div data-cf-key="contract_trainer">계약T</div>
+        <div data-cf-key="assigned_trainer">담당T</div>
         <div>액션</div>
       </div>
       <div class="pt-list-body">${rowsHtml}</div>
@@ -195,6 +288,8 @@ const PtTab = (() => {
         </div>
       ` : ''}
     `;
+    _attachColumnFilters(listEl);
+    _updateClearFiltersButton(filtered.length, allPtRegs.length);
 
     // v13: 더 보기
     const moreBtn = listEl.querySelector('#pt-load-more');

@@ -1064,24 +1064,22 @@ html, body {
 
   /* ── PT 탭 테이블 ── */
   :root {
-    /* v10: 계약금액 옆에 총결제금액 셀 추가.
-       9컬럼: 날짜|이름|전화|횟수|계약금액|총결제금액|계약T|담당T|액션
-       v14: [업그레이드] 버튼 추가로 액션 컬럼 240px 로 확대 (3개 버튼 수용) */
-    --pt-cols: 96px 100px 130px 72px 110px 110px 80px 80px 240px;
+    /* v15 (2026-04-29): 여백 전반 조정 — 행 컴팩트화 + 이름 컬럼 확대
+       9컬럼: 날짜|이름|전화|횟수|계약금액|총결제금액|계약T|담당T|액션 */
+    --pt-cols: 92px 110px 124px 64px 104px 108px 76px 76px 220px;
   }
   .pt-table-header {
-    /* v7 규칙: 테이블 헤더는 스크롤 시 툴바 아래 sticky (문의관리 탭과 동일) */
     position: sticky;
     top: 65px;
     z-index: 40;
     display: grid;
     grid-template-columns: var(--pt-cols);
-    gap: 10px;
-    padding: 10px 16px;
+    gap: 6px;
+    padding: 8px 12px;
     background: var(--color-bg-2);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     font-size: 12px;
     font-weight: 600;
     color: var(--color-text-secondary);
@@ -1089,30 +1087,30 @@ html, body {
   }
   .pt-table-header > div {
     white-space: nowrap;
-    text-align: center;            /* 문의관리 탭과 정렬 통일 */
+    text-align: center;
   }
 
   .pt-row .inquiry-card-main {
     display: grid;
     grid-template-columns: var(--pt-cols);
-    gap: 10px;
+    gap: 6px;
     align-items: center;
-    padding: 10px 16px;
+    padding: 6px 12px;
   }
   .pt-row .inquiry-card-main > div {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
-    text-align: center;            /* 헤더와 축 맞춤 */
+    font-size: 12px;
+    text-align: center;
   }
 
-  /* 세로 구분선 — 문의관리 탭과 동일 (첫 셀 제외) */
+  /* 세로 구분선 — 첫 셀 제외 */
   .pt-table-header > div + div,
   .pt-row .inquiry-card-main > div + div {
     border-left: 1px solid var(--color-divider);
-    padding-left: 8px;
+    padding-left: 6px;
   }
 
   .pt-row .col-date   { color: var(--color-text-muted); font-size: 12px; }
