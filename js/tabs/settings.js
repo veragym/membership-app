@@ -589,7 +589,7 @@ const SettingsTab = (() => {
     const listEl = document.getElementById('settings-option-list');
     const { data, error } = await supabase
       .from('sms_templates')
-      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active, auto_send, delay_days, registration_category')
+      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active, auto_send, delay_days, registration_category, expiry_target, expiry_offset_days')
       .order('is_active', { ascending: false })
       .order('sort_order', { ascending: true });
     if (error) {
@@ -633,8 +633,17 @@ const SettingsTab = (() => {
     const canMoveDown = index !== null && index < total - 1;
     const onceMark = tpl.send_once
       ? `<span class="opt-usage-badge" style="background:#FEE2E2;color:#B91C1C;">1회 한정</span>` : '';
-    const autoMark = tpl.auto_send
-      ? `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">자동 +${tpl.delay_days || 1}일${tpl.registration_category ? ' · ' + tpl.registration_category : ''}</span>` : '';
+    let autoMark = '';
+    if (tpl.auto_send) {
+      if (tpl.category === 'expiry' && tpl.expiry_target) {
+        const off = tpl.expiry_offset_days;
+        const offLabel = off < 0 ? `${off*-1}일전` : off === 0 ? '당일' : `${off}일후`;
+        const tgtLabel = tpl.expiry_target === 'locker' ? '락커' : '운동복';
+        autoMark = `<span class="opt-usage-badge" style="background:#FEF3C7;color:#92400E;">자동 · ${tgtLabel} 만료 ${offLabel}</span>`;
+      } else {
+        autoMark = `<span class="opt-usage-badge" style="background:#DBEAFE;color:#1E40AF;">자동 +${tpl.delay_days || 1}일${tpl.registration_category ? ' · ' + tpl.registration_category : ''}</span>`;
+      }
+    }
     const catLabel = (SMS_TPL_CATEGORIES.find(c => c.value === tpl.category) || {}).label || tpl.category || '';
     const msgPreview = (tpl.msg || '').replace(/\n/g, ' ').slice(0, 60) + ((tpl.msg || '').length > 60 ? '…' : '');
     return `
@@ -683,12 +692,15 @@ const SettingsTab = (() => {
 
   function buildTemplateForm(tpl) {
     const isEdit = !!tpl;
-    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '', auto_send: false, delay_days: 1, registration_category: null };
+    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '', auto_send: false, delay_days: 1, registration_category: null, expiry_target: null, expiry_offset_days: -7 };
     const catOptions = SMS_TPL_CATEGORIES.map(c =>
       `<option value="${c.value}" ${c.value === t.category ? 'selected' : ''}>${c.label}</option>`
     ).join('');
-    const autoEligible = t.category === 'registration' || t.category === 'pt';
+    const autoEligible = t.category === 'registration' || t.category === 'pt' || t.category === 'expiry';
+    const isExpiryCat = t.category === 'expiry';
     const regCat = t.registration_category;  // '신규' / '재등록' / null
+    const expTarget = t.expiry_target || 'locker';
+    const expOffset = t.expiry_offset_days != null ? t.expiry_offset_days : -7;
     return `
       <form id="tpl-form">
         <div class="form-group">
@@ -699,7 +711,7 @@ const SettingsTab = (() => {
         <div class="form-group">
           <label>카테고리</label>
           <select name="category" id="tpl-category">${catOptions}</select>
-          <div class="form-hint">자동 발송은 <strong>회원권 등록 / PT 등록</strong> 카테고리만 가능</div>
+          <div class="form-hint">자동 발송은 <strong>회원권 등록 / PT 등록 / 만료 안내</strong> 카테고리에서 가능</div>
         </div>
         <div class="form-group">
           <label>메시지 본문 *</label>
@@ -719,20 +731,22 @@ const SettingsTab = (() => {
             <input type="checkbox" name="auto_send" id="tpl-auto-check" ${t.auto_send ? 'checked' : ''}
               ${autoEligible ? '' : 'disabled'}
               style="width:18px; height:18px; flex-shrink:0; accent-color:var(--color-primary, #F97316); margin:0;">
-            <span style="font-size:14px;"><strong>자동 발송</strong> — 회원권/PT 등록 후 자동으로 발송</span>
+            <span style="font-size:14px;"><strong>자동 발송</strong> — 등록/만료 시점에 따라 자동으로 발송</span>
           </label>
-          <div id="tpl-delay-row" style="margin-top:10px; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; ${t.auto_send ? '' : 'opacity:0.5;'}">
+
+          <!-- 등록 카테고리용 (회원권/PT 등록) -->
+          <div id="tpl-delay-row" style="margin-top:10px; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; ${t.auto_send && !isExpiryCat ? '' : 'opacity:0.5; display:' + (isExpiryCat ? 'none' : 'block')};">
             <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
               <span>가입 후</span>
               <input type="number" name="delay_days" id="tpl-delay-input" min="1" max="365" value="${t.delay_days || 1}"
-                ${(t.auto_send && autoEligible) ? '' : 'disabled'}
-                style="width:80px; padding:6px 10px; font-size:14px;" required>
+                ${(t.auto_send && autoEligible && !isExpiryCat) ? '' : 'disabled'}
+                style="width:80px; padding:6px 10px; font-size:14px;">
               <span>일 후 <strong>오전 10시</strong>에 자동 발송</span>
             </label>
             <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin-top:10px;">
               <span style="white-space:nowrap;">대상</span>
               <select name="registration_category" id="tpl-reg-category"
-                ${(t.auto_send && autoEligible) ? '' : 'disabled'}
+                ${(t.auto_send && autoEligible && !isExpiryCat) ? '' : 'disabled'}
                 style="padding:6px 10px; font-size:14px;">
                 <option value="" ${!regCat ? 'selected' : ''}>신규 + 재등록 (둘 다)</option>
                 <option value="신규" ${regCat === '신규' ? 'selected' : ''}>신규 가입자만</option>
@@ -742,6 +756,32 @@ const SettingsTab = (() => {
             <div style="margin-top:6px; font-size:12px; color:var(--color-text-secondary, #6b7280);">
               · 1회만 발송됩니다 (중복 발송 없음)<br>
               · 휴무일 등으로 발송이 누락된 경우 다음 영업일에 자동 보충됩니다
+            </div>
+          </div>
+
+          <!-- 만료 안내 카테고리용 (락커/운동복) -->
+          <div id="tpl-expiry-row" style="margin-top:10px; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; ${t.auto_send && isExpiryCat ? '' : 'opacity:0.5; display:' + (isExpiryCat ? 'block' : 'none')};">
+            <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
+              <span style="white-space:nowrap;">대상</span>
+              <select name="expiry_target" id="tpl-expiry-target"
+                ${(t.auto_send && isExpiryCat) ? '' : 'disabled'}
+                style="padding:6px 10px; font-size:14px;">
+                <option value="locker" ${expTarget === 'locker' ? 'selected' : ''}>락커</option>
+                <option value="uniform" ${expTarget === 'uniform' ? 'selected' : ''}>운동복</option>
+              </select>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin-top:10px;">
+              <span style="white-space:nowrap;">발송 시점</span>
+              <span>만료</span>
+              <input type="number" name="expiry_offset_days" id="tpl-expiry-offset" min="-90" max="90" value="${expOffset}"
+                ${(t.auto_send && isExpiryCat) ? '' : 'disabled'}
+                style="width:80px; padding:6px 10px; font-size:14px; text-align:center;">
+              <span>일 (<span id="tpl-expiry-hint" style="color:var(--color-text-secondary);">${expOffset < 0 ? expOffset*-1+'일 전' : expOffset === 0 ? '당일' : expOffset+'일 후'}</span>) <strong>오전 10시</strong> 발송</span>
+            </label>
+            <div style="margin-top:6px; font-size:12px; color:var(--color-text-secondary, #6b7280);">
+              · 매일 매장 PC 가 터치짐 데이터 자동 추출 후 매칭하여 발송<br>
+              · 음수 = 만료 N일 전 / 0 = 당일 / 양수 = 만료 N일 후 (예: -7 = 7일 전)<br>
+              · 1회만 발송됩니다 (같은 회원에게 같은 템플릿 중복 발송 X)
             </div>
           </div>
         </div>
@@ -760,33 +800,66 @@ const SettingsTab = (() => {
     const delayRow = el.querySelector('#tpl-delay-row');
     const delayInput = el.querySelector('#tpl-delay-input');
     const regCatSel = el.querySelector('#tpl-reg-category');
-    if (!catSel || !autoCheck || !delayRow || !delayInput) return;
+    const expiryRow = el.querySelector('#tpl-expiry-row');
+    const expiryTargetSel = el.querySelector('#tpl-expiry-target');
+    const expiryOffsetInput = el.querySelector('#tpl-expiry-offset');
+    const expiryHint = el.querySelector('#tpl-expiry-hint');
+    if (!catSel || !autoCheck) return;
 
     const update = () => {
       const cat = catSel.value;
-      const eligible = cat === 'registration' || cat === 'pt';
+      const eligible = cat === 'registration' || cat === 'pt' || cat === 'expiry';
+      const isExpiry = cat === 'expiry';
       autoCheck.disabled = !eligible;
       if (!eligible) autoCheck.checked = false;
       const on = autoCheck.checked && eligible;
-      delayInput.disabled = !on;
-      if (regCatSel) regCatSel.disabled = !on;
-      delayRow.style.opacity = on ? '1' : '0.5';
+
+      // 등록 카테고리 영역 토글
+      if (delayRow) {
+        delayRow.style.display = isExpiry ? 'none' : 'block';
+        delayRow.style.opacity = (on && !isExpiry) ? '1' : '0.5';
+      }
+      if (delayInput) delayInput.disabled = !(on && !isExpiry);
+      if (regCatSel) regCatSel.disabled = !(on && !isExpiry);
+
+      // 만료 안내 영역 토글
+      if (expiryRow) {
+        expiryRow.style.display = isExpiry ? 'block' : 'none';
+        expiryRow.style.opacity = (on && isExpiry) ? '1' : '0.5';
+      }
+      if (expiryTargetSel) expiryTargetSel.disabled = !(on && isExpiry);
+      if (expiryOffsetInput) expiryOffsetInput.disabled = !(on && isExpiry);
+    };
+
+    const updateOffsetHint = () => {
+      if (!expiryOffsetInput || !expiryHint) return;
+      const v = parseInt(expiryOffsetInput.value, 10) || 0;
+      expiryHint.textContent = v < 0 ? (v * -1) + '일 전' : v === 0 ? '당일' : v + '일 후';
     };
 
     catSel.addEventListener('change', update);
     autoCheck.addEventListener('change', update);
+    if (expiryOffsetInput) expiryOffsetInput.addEventListener('input', updateOffsetHint);
   }
 
   function extractTemplateFormData(form) {
     const fd = new FormData(form);
     const category = fd.get('category');
-    const autoEligible = category === 'registration' || category === 'pt';
+    const autoEligible = category === 'registration' || category === 'pt' || category === 'expiry';
     const autoSend = autoEligible && fd.get('auto_send') === 'on';
-    const delayDays = autoSend ? Math.max(1, parseInt(fd.get('delay_days'), 10) || 1) : 1;
-    // v15: registration_category — 자동 발송 + autoEligible 일 때만 의미. 빈 값이면 NULL (둘 다)
+    const isExpiry = category === 'expiry';
+    const delayDays = (autoSend && !isExpiry) ? Math.max(1, parseInt(fd.get('delay_days'), 10) || 1) : 1;
+    // registration_category — 등록 카테고리 + auto_send 일 때만 의미
     const regCatRaw = (fd.get('registration_category') || '').trim();
-    const registrationCategory = (autoSend && (regCatRaw === '신규' || regCatRaw === '재등록'))
+    const registrationCategory = (autoSend && !isExpiry && (regCatRaw === '신규' || regCatRaw === '재등록'))
       ? regCatRaw : null;
+    // expiry_target / expiry_offset_days — expiry 카테고리 + auto_send 일 때만 의미
+    const expTargetRaw = (fd.get('expiry_target') || '').trim();
+    const expiryTarget = (autoSend && isExpiry && (expTargetRaw === 'locker' || expTargetRaw === 'uniform'))
+      ? expTargetRaw : null;
+    const expOffsetRaw = fd.get('expiry_offset_days');
+    const expiryOffsetDays = (autoSend && isExpiry && expOffsetRaw !== '' && expOffsetRaw != null)
+      ? parseInt(expOffsetRaw, 10) : null;
     return {
       name: fd.get('name').trim(),
       category,
@@ -795,6 +868,8 @@ const SettingsTab = (() => {
       auto_send: autoSend,
       delay_days: delayDays,
       registration_category: registrationCategory,
+      expiry_target: expiryTarget,
+      expiry_offset_days: expiryOffsetDays,
     };
   }
 
