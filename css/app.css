@@ -4971,3 +4971,59 @@ html, body {
   color: var(--color-text-muted);
   line-height: 1.6;
 }
+
+/* ─── 통계 - 마케팅 분석 카드 추가 (v15.1, 2026-04-29) ─── */
+.cmp-table-7col th, .cmp-table-7col td {
+  padding: 8px 10px;
+}
+.cmp-table-7col td:first-child, .cmp-table-7col th:first-child {
+  width: auto;
+  font-weight: 500;
+}
+
+/* 6개월 추이 막대그래프 */
+.trend-bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+.trend-bar-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 140px;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.trend-bar-label {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  text-align: right;
+}
+.trend-bar-track {
+  height: 22px;
+  background: var(--color-bg-0);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  min-width: 4px;
+  transition: width 0.3s;
+}
+.trend-bar-unreg {
+  background: #9CA3AF;
+  height: 100%;
+}
+.trend-bar-reg {
+  background: var(--color-primary, #F97316);
+  height: 100%;
+}
+.trend-bar-value {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-feature-settings: "tnum";
+}
+.trend-bar-value small {
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 11px;
+}

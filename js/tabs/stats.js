@@ -592,53 +592,74 @@ const StatsTab = (() => {
     ].join('\n');
   }
 
-  // ───────── [기간별 비교] — 전월 대비 문의량 ─────────
+  // ───────── [기간별 비교] — 마케팅 분석 대시보드 ─────────
   async function renderCompare(container) {
     container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
     const now = new Date();
     const cy = now.getFullYear();
-    const cm = now.getMonth() + 1;          // 1-12
+    const cm = now.getMonth() + 1;
     const cd = now.getDate();
 
     const cmFrom = `${cy}-${String(cm).padStart(2,'0')}-01`;
     const cmTo   = isoDate(now);
 
-    // 전월 같은 기간 (전월 1일 ~ 전월 같은 일자, 일자 클램프)
     const prevY = cm === 1 ? cy - 1 : cy;
     const prevM = cm === 1 ? 12 : cm - 1;
-    const prevMonthLastDay = new Date(prevY, prevM, 0).getDate();   // 전월 말일
+    const prevMonthLastDay = new Date(prevY, prevM, 0).getDate();
     const prevDay = Math.min(cd, prevMonthLastDay);
     const pmFrom = `${prevY}-${String(prevM).padStart(2,'0')}-01`;
     const pmTo   = `${prevY}-${String(prevM).padStart(2,'0')}-${String(prevDay).padStart(2,'0')}`;
 
-    // 이번 달 + 전월 동시 fetch
-    const [cmRes, pmRes] = await Promise.all([
-      supabase.from('inquiries').select('status').gte('inquiry_date', cmFrom).lte('inquiry_date', cmTo),
-      supabase.from('inquiries').select('status').gte('inquiry_date', pmFrom).lte('inquiry_date', pmTo),
+    // 최근 6개월 (이번 달 포함, 시작 = 5개월 전 1일)
+    const sixStart = new Date(cy, cm - 6, 1);
+    const sixFrom = isoDate(sixStart);
+
+    const COLS = 'status, inflow_channel, residence, category, inquiry_date';
+    const [cmRes, pmRes, sixRes] = await Promise.all([
+      supabase.from('inquiries').select(COLS).gte('inquiry_date', cmFrom).lte('inquiry_date', cmTo),
+      supabase.from('inquiries').select(COLS).gte('inquiry_date', pmFrom).lte('inquiry_date', pmTo),
+      supabase.from('inquiries').select(COLS).gte('inquiry_date', sixFrom).lte('inquiry_date', cmTo),
     ]);
     const cmData = cmRes.data || [];
     const pmData = pmRes.data || [];
-
-    const cmReg   = cmData.filter(r => r.status === 'registered').length;
-    const cmUnreg = cmData.length - cmReg;
-    const pmReg   = pmData.filter(r => r.status === 'registered').length;
-    const pmUnreg = pmData.length - pmReg;
-
-    const diffStr = (cur, prev) => {
-      const d = cur - prev;
-      const pct = prev > 0 ? (d / prev * 100) : (cur > 0 ? 100 : 0);
-      const sign = d > 0 ? '+' : (d < 0 ? '' : '±');
-      const cls = d > 0 ? 'pos' : (d < 0 ? 'neg' : 'flat');
-      return `<span class="cmp-diff ${cls}">${sign}${d.toLocaleString()} <small>(${sign}${pct.toFixed(1)}%)</small></span>`;
-    };
+    const sixData = sixRes.data || [];
 
     const fmtRange = (from, to) => {
       const f = from.split('-'), t = to.split('-');
       return `${parseInt(f[1])}/${parseInt(f[2])} ~ ${parseInt(t[1])}/${parseInt(t[2])}`;
     };
+    const diffStr = (cur, prev, suffix='건') => {
+      const d = cur - prev;
+      const pct = prev > 0 ? (d / prev * 100) : (cur > 0 ? 100 : 0);
+      const sign = d > 0 ? '+' : (d < 0 ? '' : '±');
+      const cls = d > 0 ? 'pos' : (d < 0 ? 'neg' : 'flat');
+      return `<span class="cmp-diff ${cls}">${sign}${d.toLocaleString()}${suffix} <small>(${sign}${pct.toFixed(1)}%)</small></span>`;
+    };
 
-    container.innerHTML = `
+    const groupByDim = (rows, dimKey) => {
+      const map = new Map();
+      rows.forEach(r => {
+        const key = r[dimKey] && r[dimKey].trim() ? r[dimKey].trim() : '(없음)';
+        if (!map.has(key)) map.set(key, { total: 0, registered: 0 });
+        const m = map.get(key);
+        m.total++;
+        if (r.status === 'registered') m.registered++;
+      });
+      return Array.from(map.entries())
+        .map(([k, v]) => ({ key: k, total: v.total, registered: v.registered, unregistered: v.total - v.registered, rate: v.total > 0 ? v.registered / v.total * 100 : 0 }))
+        .sort((a, b) => b.total - a.total);
+    };
+
+    const cmReg   = cmData.filter(r => r.status === 'registered').length;
+    const cmUnreg = cmData.length - cmReg;
+    const pmReg   = pmData.filter(r => r.status === 'registered').length;
+    const pmUnreg = pmData.length - pmReg;
+    const cmRate  = cmData.length > 0 ? (cmReg / cmData.length * 100) : 0;
+    const pmRate  = pmData.length > 0 ? (pmReg / pmData.length * 100) : 0;
+
+    // 카드 1: 전월 대비 합계
+    const card1 = `
       <div class="cmp-card">
         <div class="cmp-card-header">
           <div class="cmp-card-title">전월 대비 문의량</div>
@@ -648,49 +669,128 @@ const StatsTab = (() => {
           </div>
         </div>
         <table class="cmp-table">
-          <thead>
-            <tr>
-              <th>구분</th>
-              <th>이번 달 (${cm}월)</th>
-              <th>전월 (${prevM}월)</th>
-              <th>증감</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th>구분</th><th>이번 달 (${cm}월)</th><th>전월 (${prevM}월)</th><th>증감</th>
+          </tr></thead>
           <tbody>
-            <tr>
-              <td>미등록 문의</td>
-              <td class="cmp-num">${cmUnreg.toLocaleString()}건</td>
-              <td class="cmp-num">${pmUnreg.toLocaleString()}건</td>
-              <td>${diffStr(cmUnreg, pmUnreg)}</td>
-            </tr>
-            <tr>
-              <td>등록 완료</td>
-              <td class="cmp-num">${cmReg.toLocaleString()}건</td>
-              <td class="cmp-num">${pmReg.toLocaleString()}건</td>
-              <td>${diffStr(cmReg, pmReg)}</td>
-            </tr>
-            <tr class="cmp-total">
-              <td>합계</td>
-              <td class="cmp-num">${cmData.length.toLocaleString()}건</td>
-              <td class="cmp-num">${pmData.length.toLocaleString()}건</td>
-              <td>${diffStr(cmData.length, pmData.length)}</td>
-            </tr>
-            <tr>
-              <td>등록 전환율</td>
-              <td class="cmp-num">${cmData.length > 0 ? (cmReg / cmData.length * 100).toFixed(1) : '0.0'}%</td>
-              <td class="cmp-num">${pmData.length > 0 ? (pmReg / pmData.length * 100).toFixed(1) : '0.0'}%</td>
-              <td>${diffStr(
-                Number(cmData.length > 0 ? (cmReg / cmData.length * 1000) : 0),
-                Number(pmData.length > 0 ? (pmReg / pmData.length * 1000) : 0)
-              ).replace(/건/g, '')}</td>
-            </tr>
+            <tr><td>미등록 문의</td><td class="cmp-num">${cmUnreg.toLocaleString()}건</td><td class="cmp-num">${pmUnreg.toLocaleString()}건</td><td>${diffStr(cmUnreg, pmUnreg)}</td></tr>
+            <tr><td>등록 완료</td><td class="cmp-num">${cmReg.toLocaleString()}건</td><td class="cmp-num">${pmReg.toLocaleString()}건</td><td>${diffStr(cmReg, pmReg)}</td></tr>
+            <tr class="cmp-total"><td>합계</td><td class="cmp-num">${cmData.length.toLocaleString()}건</td><td class="cmp-num">${pmData.length.toLocaleString()}건</td><td>${diffStr(cmData.length, pmData.length)}</td></tr>
+            <tr><td>등록 전환율</td><td class="cmp-num">${cmRate.toFixed(1)}%</td><td class="cmp-num">${pmRate.toFixed(1)}%</td><td>${diffStr(Number(cmRate.toFixed(1)), Number(pmRate.toFixed(1)), '%p').replace('%p건','%p')}</td></tr>
           </tbody>
         </table>
-        <div class="cmp-note">
-          · 미등록 = inquiries.status &lt;&gt; 'registered' (모든 신규/재등록 문의 포함)<br>
-          · 등록 = inquiries.status = 'registered'<br>
-          · 전월은 같은 일자까지만 비교 (월말 비교 정확)
+      </div>
+    `;
+
+    // 카드 2: 유입 채널 TOP 5 (이번 달 vs 전월 매칭)
+    const cmInflow = groupByDim(cmData, 'inflow_channel').slice(0, 5);
+    const pmInflowMap = new Map(groupByDim(pmData, 'inflow_channel').map(x => [x.key, x]));
+    const inflowRows = cmInflow.map(c => {
+      const p = pmInflowMap.get(c.key) || { total: 0, registered: 0, rate: 0 };
+      return `
+        <tr>
+          <td>${escHtml(c.key)}</td>
+          <td class="cmp-num">${c.total}</td>
+          <td class="cmp-num">${c.registered}</td>
+          <td class="cmp-num"><strong>${c.rate.toFixed(1)}%</strong></td>
+          <td class="cmp-num">${p.total}</td>
+          <td>${diffStr(c.total, p.total)}</td>
+        </tr>
+      `;
+    }).join('');
+    const card2 = `
+      <div class="cmp-card">
+        <div class="cmp-card-header">
+          <div class="cmp-card-title">유입 채널 TOP 5</div>
+          <div class="cmp-card-sub">이번 달 ${cm}월 기준 채널별 전환율 + 전월 대비</div>
         </div>
+        <table class="cmp-table cmp-table-7col">
+          <thead><tr>
+            <th>채널</th><th>이번 달</th><th>등록</th><th>전환율</th><th>전월</th><th>증감</th>
+          </tr></thead>
+          <tbody>${inflowRows || '<tr><td colspan="6" style="color:var(--color-text-muted);">데이터 없음</td></tr>'}</tbody>
+        </table>
+      </div>
+    `;
+
+    // 카드 3: 거주지 TOP 5
+    const cmResidence = groupByDim(cmData, 'residence').slice(0, 5);
+    const pmResidenceMap = new Map(groupByDim(pmData, 'residence').map(x => [x.key, x]));
+    const residenceRows = cmResidence.map(c => {
+      const p = pmResidenceMap.get(c.key) || { total: 0, registered: 0, rate: 0 };
+      return `
+        <tr>
+          <td>${escHtml(c.key)}</td>
+          <td class="cmp-num">${c.total}</td>
+          <td class="cmp-num">${c.registered}</td>
+          <td class="cmp-num"><strong>${c.rate.toFixed(1)}%</strong></td>
+          <td class="cmp-num">${p.total}</td>
+          <td>${diffStr(c.total, p.total)}</td>
+        </tr>
+      `;
+    }).join('');
+    const card3 = `
+      <div class="cmp-card">
+        <div class="cmp-card-header">
+          <div class="cmp-card-title">거주지 TOP 5</div>
+          <div class="cmp-card-sub">이번 달 ${cm}월 기준 거주지별 문의 + 전월 대비</div>
+        </div>
+        <table class="cmp-table cmp-table-7col">
+          <thead><tr>
+            <th>거주지</th><th>이번 달</th><th>등록</th><th>전환율</th><th>전월</th><th>증감</th>
+          </tr></thead>
+          <tbody>${residenceRows || '<tr><td colspan="6" style="color:var(--color-text-muted);">데이터 없음</td></tr>'}</tbody>
+        </table>
+      </div>
+    `;
+
+    // 카드 4: 최근 6개월 추이
+    const monthMap = new Map();
+    sixData.forEach(r => {
+      const ym = (r.inquiry_date || '').slice(0, 7);
+      if (!ym) return;
+      if (!monthMap.has(ym)) monthMap.set(ym, { reg: 0, unreg: 0 });
+      const m = monthMap.get(ym);
+      if (r.status === 'registered') m.reg++; else m.unreg++;
+    });
+    const monthList = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(cy, cm - 1 - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const data = monthMap.get(ym) || { reg: 0, unreg: 0 };
+      monthList.push({ ym, label: `${d.getMonth()+1}월`, ...data, total: data.reg + data.unreg });
+    }
+    const maxTotal = Math.max(...monthList.map(m => m.total), 1);
+    const trendRows = monthList.map(m => {
+      const totalPct = (m.total / maxTotal * 100).toFixed(1);
+      const regPct = m.total > 0 ? (m.reg / m.total * 100).toFixed(1) : 0;
+      const unregPct = m.total > 0 ? (m.unreg / m.total * 100).toFixed(1) : 0;
+      return `
+        <div class="trend-bar-row">
+          <div class="trend-bar-label">${m.label}</div>
+          <div class="trend-bar-track" style="width:${totalPct}%;">
+            <div class="trend-bar-unreg" style="width:${unregPct}%;" title="미등록 ${m.unreg}건"></div>
+            <div class="trend-bar-reg" style="width:${regPct}%;" title="등록 ${m.reg}건"></div>
+          </div>
+          <div class="trend-bar-value">${m.total}건 <small>(등록 ${m.reg})</small></div>
+        </div>
+      `;
+    }).join('');
+    const card4 = `
+      <div class="cmp-card">
+        <div class="cmp-card-header">
+          <div class="cmp-card-title">최근 6개월 추이</div>
+          <div class="cmp-card-sub">월별 문의량 — 미등록(회색) + 등록(주황) 누적</div>
+        </div>
+        <div class="trend-bar-list">${trendRows}</div>
+      </div>
+    `;
+
+    container.innerHTML = card1 + card2 + card3 + card4 + `
+      <div class="cmp-note">
+        · 미등록 = inquiries.status ≠ 'registered' / 등록 = inquiries.status = 'registered'<br>
+        · 전월은 같은 일자까지만 비교 (월말 비교 정확)<br>
+        · 채널/거주지 TOP 5 는 이번 달 문의 건수 기준 정렬
       </div>
     `;
   }
