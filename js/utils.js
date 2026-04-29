@@ -148,6 +148,11 @@ async function autoScheduleSmsForRegistration(record, triggerCategory, relatedTa
 
     const { error } = await supabase.from('sms_scheduled').insert(rows);
     if (error) {
+      // 23505 (unique violation) — 같은 entity 에 같은 템플릿이 이미 큐에 있음 → 정상 동작 (중복 차단)
+      if (error.code === '23505' || /duplicate key/i.test(error.message)) {
+        console.info('[auto-sms] 같은 등록·템플릿 조합 이미 큐에 있음 — 중복 INSERT 차단됨 (정상)');
+        return;
+      }
       console.warn('[auto-sms] scheduled insert failed:', error);
       if (typeof Toast !== 'undefined') Toast.warning(`자동 문자 예약 실패: ${error.message}`);
       return;
