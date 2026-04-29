@@ -28,12 +28,8 @@ const SptTab = (() => {
   const sessionsCache = new Map();    // memberId → session rows
   const memberDetailCache = new Map();// memberId → spt_members row
 
-  let filter = {
-    search: '',
-    state: 'all',               // all | pending | in_progress | completed | rejected | unreachable | other
-    slot: 'all',                // all | 오전 | 오후 | 전체
-    trainerId: ''               // '' = 전체, '__unassigned__' = 미배정만, uuid = 특정 트레이너
-  };
+  // v15: 토글/select 필터 제거 → 컬럼 필터로 통합. search 만 유지.
+  let filter = { search: '' };
 
   // ─────────────── 초기화 ───────────────
   let _realtimeChannel = null;
@@ -192,40 +188,15 @@ const SptTab = (() => {
   function renderToolbar() {
     const pane = document.getElementById('tab-spt');
 
-    const slotChip = (val, label) =>
-      `<button class="btn btn-chip${filter.slot === val ? ' active' : ''}" data-spt-slot="${escHtml(val)}">${escHtml(label)}</button>`;
-
-    const trainerOpts = [
-      `<option value=""${filter.trainerId === '' ? ' selected' : ''}>트레이너 전체</option>`,
-      `<option value="__unassigned__"${filter.trainerId === '__unassigned__' ? ' selected' : ''}>미배정</option>`,
-      ...activeTrainers.map(t =>
-        `<option value="${escHtml(t.id)}"${filter.trainerId === t.id ? ' selected' : ''}>${escHtml(t.name)}</option>`)
-    ].join('');
-
-    const stateOpts = [
-      ['all', '상태 전체'], ['pending', '진행전'], ['in_progress', '진행중'],
-      ['managing', '관리중'], ['registered', '등록'],
-      ['completed', '완료'], ['rejected', '거부'], ['unreachable', '연락안됨'], ['other', '기타']
-    ].map(([v, l]) =>
-      `<option value="${v}"${filter.state === v ? ' selected' : ''}>${l}</option>`
-    ).join('');
-
     pane.innerHTML = `
       <div class="inquiry-toolbar spt-toolbar">
         <input type="text" class="search-box" id="spt-search" placeholder="이름 또는 번호 검색...">
-        <div class="status-filter" role="group" aria-label="시간대 필터">
-          ${slotChip('all', '전체')}
-          ${slotChip('오전', '오전')}
-          ${slotChip('오후', '오후')}
-        </div>
-        <div class="manager-filter">
-          <select class="filter-select" id="spt-filter-trainer">${trainerOpts}</select>
-          <select class="filter-select" id="spt-filter-state">${stateOpts}</select>
-        </div>
+        <div style="flex:1;"></div>
         <div class="inquiry-toolbar-actions">
+          <span class="inquiry-filter-count" id="spt-filter-count" style="display:none;"></span>
+          <button class="btn btn-secondary btn-chip-sized" id="btn-spt-clear-filters" style="display:none;">필터 초기화</button>
           <button class="btn btn-primary btn-chip-sized" id="btn-spt-new">+ SPT 신규</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-spt-sync">동기화</button>
-          <button class="btn btn-secondary btn-chip-sized" id="btn-spt-reset">초기화</button>
         </div>
       </div>
       <div id="spt-list"></div>
@@ -236,34 +207,8 @@ const SptTab = (() => {
       renderList();
     }, 250));
 
-    pane.querySelector('.status-filter').addEventListener('click', e => {
-      const btn = e.target.closest('[data-spt-slot]');
-      if (!btn) return;
-      filter.slot = btn.dataset.sptSlot;
-      pane.querySelectorAll('.status-filter [data-spt-slot]').forEach(b =>
-        b.classList.toggle('active', b.dataset.sptSlot === filter.slot)
-      );
-      renderList();
-    });
-
-    pane.querySelector('#spt-filter-trainer').addEventListener('change', e => {
-      filter.trainerId = e.target.value;
-      renderList();
-    });
-
-    pane.querySelector('#spt-filter-state').addEventListener('change', e => {
-      filter.state = e.target.value;
-      renderList();
-    });
-
-    pane.querySelector('#btn-spt-reset').addEventListener('click', () => {
-      filter = { search: '', state: 'all', slot: 'all', trainerId: '' };
-      pane.querySelector('#spt-search').value = '';
-      pane.querySelectorAll('.status-filter [data-spt-slot]').forEach(b =>
-        b.classList.toggle('active', b.dataset.sptSlot === 'all')
-      );
-      pane.querySelector('#spt-filter-trainer').value = '';
-      pane.querySelector('#spt-filter-state').value = 'all';
+    pane.querySelector('#btn-spt-clear-filters').addEventListener('click', () => {
+      ColumnFilter.clearAll('spt');
       renderList();
     });
 
@@ -284,6 +229,79 @@ const SptTab = (() => {
     });
 
     pane.querySelector('#btn-spt-new').addEventListener('click', () => openCreateModal());
+  }
+
+  // ─── 컬럼 필터 (v15) ──────────────────────────────────
+  function _columnFilterConfig() {
+    return {
+      registered_at: { type: 'date_range', getValue: r => (r.registered_at || '').slice(0, 10) },
+      slot: { type: 'enum', getValue: r => r.preferred_time_slot || '전체' },
+      trainer: { type: 'enum', getValue: r => r.trainer_name || '' },
+      status: { type: 'enum', getValue: r => deriveCurrentStatus(r) },
+    };
+  }
+
+  const _sptStatusLabel = {
+    pending: '진행전', in_progress: '진행중', managing: '관리중', registered: '등록',
+    completed: '완료', rejected: '거부', unreachable: '연락안됨', other: '기타',
+  };
+
+  function _uniqueOptions(getValue, columnKey) {
+    const counts = new Map();
+    allSummaries.forEach(r => {
+      const v = getValue(r);
+      const key = v == null ? '' : String(v);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({
+        value,
+        label: columnKey === 'status' ? (_sptStatusLabel[value] || value) :
+               columnKey === 'trainer' && value === '' ? '미배정' :
+               (value === '' ? '(없음)' : value),
+        count
+      }))
+      .sort((a, b) => {
+        if (a.value === '') return 1;
+        if (b.value === '') return -1;
+        return b.count - a.count;
+      });
+  }
+
+  function _attachColumnFilters(listEl) {
+    const cfg = _columnFilterConfig();
+    const labelMap = {
+      registered_at: '날짜', slot: '시간대', trainer: '담당T', status: '진행상태',
+    };
+    listEl.querySelectorAll('[data-cf-key]').forEach(headerEl => {
+      const key = headerEl.dataset.cfKey;
+      const c = cfg[key];
+      if (!c) return;
+      ColumnFilter.attach(headerEl, {
+        tab: 'spt',
+        key,
+        type: c.type,
+        label: labelMap[key] || key,
+        getOptions: () => _uniqueOptions(c.getValue, key),
+        onChange: () => renderList(),
+      });
+    });
+  }
+
+  function _updateClearFiltersButton(filteredCount, totalCount) {
+    const btn = document.getElementById('btn-spt-clear-filters');
+    const countEl = document.getElementById('spt-filter-count');
+    if (!btn || !countEl) return;
+    const n = ColumnFilter.activeCount('spt');
+    if (n > 0) {
+      btn.style.display = '';
+      btn.textContent = `필터 초기화 (${n})`;
+      countEl.style.display = '';
+      countEl.innerHTML = `<strong>${(filteredCount ?? 0).toLocaleString()}</strong>건 일치 / 전체 <strong>${(totalCount ?? 0).toLocaleString()}</strong>건`;
+    } else {
+      btn.style.display = 'none';
+      countEl.style.display = 'none';
+    }
   }
 
   // ─────────────── 리스트 렌더 ───────────────
@@ -334,27 +352,17 @@ const SptTab = (() => {
   }
 
   function applyFilters(rows) {
-    return rows.filter(r => {
-      if (filter.search) {
-        const q = filter.search.toLowerCase();
+    let result = rows;
+    if (filter.search) {
+      const q = filter.search.toLowerCase();
+      result = result.filter(r => {
         const inName = (r.member_name || '').toLowerCase().includes(q);
         const inPhone = (r.phone || '').includes(filter.search);
-        if (!inName && !inPhone) return false;
-      }
-      if (filter.state !== 'all') {
-        if (deriveCurrentStatus(r) !== filter.state) return false;
-      }
-      if (filter.slot !== 'all') {
-        if ((r.preferred_time_slot || '전체') !== filter.slot) return false;
-      }
-      // 트레이너 필터 — __unassigned__ 는 미배정만, 특정 id 는 그 트레이너만
-      if (filter.trainerId === '__unassigned__') {
-        if (r.trainer_id) return false;
-      } else if (filter.trainerId) {
-        if (r.trainer_id !== filter.trainerId) return false;
-      }
-      return true;
-    });
+        return inName || inPhone;
+      });
+    }
+    // v15: 컬럼 필터 적용
+    return ColumnFilter.apply('spt', result, _columnFilterConfig());
   }
 
   function renderList() {
@@ -363,16 +371,20 @@ const SptTab = (() => {
 
     if (allSummaries.length === 0) {
       listEl.innerHTML = `<div class="empty-state">아직 SPT 회원이 없습니다. [+ SPT 신규]로 시작하세요.</div>`;
+      _updateClearFiltersButton(0, 0);
       return;
     }
 
     const filtered = applyFilters(allSummaries);
     if (filtered.length === 0) {
-      listEl.innerHTML = `<div class="empty-state">검색 결과 없음</div>`;
+      listEl.innerHTML = `<div class="empty-state">검색/필터 조건에 맞는 회원이 없습니다.</div>`;
+      _updateClearFiltersButton(0, allSummaries.length);
       return;
     }
 
     listEl.innerHTML = `<div class="spt-card-list">${renderListHeader()}${filtered.map(r => renderCard(r)).join('')}</div>`;
+    _attachColumnFilters(listEl);
+    _updateClearFiltersButton(filtered.length, allSummaries.length);
 
     // 카드 바인딩
     filtered.forEach(r => bindCard(r.member_id));
@@ -495,13 +507,13 @@ const SptTab = (() => {
   function renderListHeader() {
     return `
       <div class="spt-row spt-row-header" aria-hidden="true">
-        <div class="spt-row-cell">날짜</div>
+        <div class="spt-row-cell" data-cf-key="registered_at">날짜</div>
         <div class="spt-row-cell">이름</div>
         <div class="spt-row-cell">연락처</div>
-        <div class="spt-row-cell">시간대</div>
-        <div class="spt-row-cell">담당T</div>
+        <div class="spt-row-cell" data-cf-key="slot">시간대</div>
+        <div class="spt-row-cell" data-cf-key="trainer">담당T</div>
         <div class="spt-row-cell">관리자 메모</div>
-        <div class="spt-row-cell">진행상태</div>
+        <div class="spt-row-cell" data-cf-key="status">진행상태</div>
         <div class="spt-row-cell">SPT1</div>
         <div class="spt-row-cell">SPT2</div>
         <div class="spt-row-cell">최신 코멘트</div>

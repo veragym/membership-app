@@ -2703,19 +2703,19 @@ html, body {
 .spt-filter-select:hover { border-color: var(--color-primary-border); }
 .spt-filter-select:focus { outline: none; border-color: var(--color-primary); }
 
-/* 헤더 — sticky, inquiry-table-header 동일 패턴 */
+/* 헤더 — sticky, PT/inquiry 탭과 동일 패턴 (v15: 여백 통일) */
 .spt-row-header {
   position: sticky;
   top: 65px;
   z-index: 40;
   display: grid;
   grid-template-columns: var(--spt-cols);
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 12px;
   background: var(--color-bg-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
@@ -2726,29 +2726,29 @@ html, body {
   text-align: center;
 }
 
-/* 데이터 행 — inquiry-card-main 동일 패턴 */
+/* 데이터 행 — PT 탭과 동일 (v15: 여백 통일) */
 .spt-row {
   display: grid;
   grid-template-columns: var(--spt-cols);
   gap: 6px;
   align-items: center;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 6px 12px;
+  font-size: 12px;
 }
 .spt-row-cell {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 12px;
   text-align: center;
 }
 
-/* 공통 세로 구분선 — 첫 셀 제외, 모든 인접 셀 사이 얇은 divider */
+/* 공통 세로 구분선 — 첫 셀 제외 */
 .spt-row-header > div + div,
 .spt-row > div + div {
   border-left: 1px solid var(--color-divider);
-  padding-left: 10px;
+  padding-left: 6px;
 }
 
 /* 셀별 typography — inquiry 규칙 따름 (name 12px normal, phone/secondary, etc) */
