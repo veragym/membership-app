@@ -658,6 +658,17 @@ const StatsTab = (() => {
     const cmRate  = cmData.length > 0 ? (cmReg / cmData.length * 100) : 0;
     const pmRate  = pmData.length > 0 ? (pmReg / pmData.length * 100) : 0;
 
+    // 신규/재등록 분리 집계 헬퍼
+    const splitByCategory = (rows) => {
+      const newR  = rows.filter(r => r.category === '신규');
+      const reR   = rows.filter(r => r.category === '재등록');
+      const reg   = (arr) => arr.filter(r => r.status === 'registered').length;
+      const calc  = (arr) => ({ total: arr.length, reg: reg(arr), rate: arr.length > 0 ? (reg(arr) / arr.length * 100) : 0 });
+      return { new: calc(newR), re: calc(reR) };
+    };
+    const cmCat = splitByCategory(cmData);
+    const pmCat = splitByCategory(pmData);
+
     // 카드 1: 전월 대비 합계
     const card1 = `
       <div class="cmp-card">
@@ -677,6 +688,35 @@ const StatsTab = (() => {
             <tr><td>등록 완료</td><td class="cmp-num">${cmReg.toLocaleString()}건</td><td class="cmp-num">${pmReg.toLocaleString()}건</td><td>${diffStr(cmReg, pmReg)}</td></tr>
             <tr class="cmp-total"><td>합계</td><td class="cmp-num">${cmData.length.toLocaleString()}건</td><td class="cmp-num">${pmData.length.toLocaleString()}건</td><td>${diffStr(cmData.length, pmData.length)}</td></tr>
             <tr><td>등록 전환율</td><td class="cmp-num">${cmRate.toFixed(1)}%</td><td class="cmp-num">${pmRate.toFixed(1)}%</td><td>${diffStr(Number(cmRate.toFixed(1)), Number(pmRate.toFixed(1)), '%p').replace('%p건','%p')}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    // 카드 1.5: 신규 vs 재등록 분석
+    const cmNewRate = cmCat.new.rate;
+    const cmReRate  = cmCat.re.rate;
+    const pmNewRate = pmCat.new.rate;
+    const pmReRate  = pmCat.re.rate;
+    const card1_5 = `
+      <div class="cmp-card">
+        <div class="cmp-card-header">
+          <div class="cmp-card-title">신규 vs 재등록 분석</div>
+          <div class="cmp-card-sub">문의자가 신규인지 재등록인지 분리 + 각각의 등록 전환율</div>
+        </div>
+        <table class="cmp-table">
+          <thead><tr>
+            <th>구분</th><th>이번 달 (${cm}월)</th><th>전월 (${prevM}월)</th><th>증감</th>
+          </tr></thead>
+          <tbody>
+            <tr class="cmp-section-head"><td colspan="4"><strong>🆕 신규 가입자</strong></td></tr>
+            <tr><td>· 문의 건수</td><td class="cmp-num">${cmCat.new.total.toLocaleString()}건</td><td class="cmp-num">${pmCat.new.total.toLocaleString()}건</td><td>${diffStr(cmCat.new.total, pmCat.new.total)}</td></tr>
+            <tr><td>· 등록 완료</td><td class="cmp-num">${cmCat.new.reg.toLocaleString()}건</td><td class="cmp-num">${pmCat.new.reg.toLocaleString()}건</td><td>${diffStr(cmCat.new.reg, pmCat.new.reg)}</td></tr>
+            <tr><td>· 등록 전환율</td><td class="cmp-num">${cmNewRate.toFixed(1)}%</td><td class="cmp-num">${pmNewRate.toFixed(1)}%</td><td>${diffStr(Number(cmNewRate.toFixed(1)), Number(pmNewRate.toFixed(1)), '%p').replace('%p건','%p')}</td></tr>
+            <tr class="cmp-section-head"><td colspan="4"><strong>🔁 재등록자</strong></td></tr>
+            <tr><td>· 문의 건수</td><td class="cmp-num">${cmCat.re.total.toLocaleString()}건</td><td class="cmp-num">${pmCat.re.total.toLocaleString()}건</td><td>${diffStr(cmCat.re.total, pmCat.re.total)}</td></tr>
+            <tr><td>· 등록 완료</td><td class="cmp-num">${cmCat.re.reg.toLocaleString()}건</td><td class="cmp-num">${pmCat.re.reg.toLocaleString()}건</td><td>${diffStr(cmCat.re.reg, pmCat.re.reg)}</td></tr>
+            <tr><td>· 등록 전환율</td><td class="cmp-num">${cmReRate.toFixed(1)}%</td><td class="cmp-num">${pmReRate.toFixed(1)}%</td><td>${diffStr(Number(cmReRate.toFixed(1)), Number(pmReRate.toFixed(1)), '%p').replace('%p건','%p')}</td></tr>
           </tbody>
         </table>
       </div>
@@ -786,7 +826,7 @@ const StatsTab = (() => {
       </div>
     `;
 
-    container.innerHTML = card1 + card2 + card3 + card4 + `
+    container.innerHTML = card1 + card1_5 + card2 + card3 + card4 + `
       <div class="cmp-note">
         · 미등록 = inquiries.status ≠ 'registered' / 등록 = inquiries.status = 'registered'<br>
         · 전월은 같은 일자까지만 비교 (월말 비교 정확)<br>
