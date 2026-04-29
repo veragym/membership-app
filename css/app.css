@@ -4757,40 +4757,22 @@ html, body {
 }
 
 /* ─── 컬럼 필터 (v15, 2026-04-29) ─── */
-.col-filter-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-left: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
+/* v2: ▼ 아이콘 제거 — 헤더 셀 자체가 클릭됨 */
+.col-filter-icon { display: none; }
+
+/* 헤더 셀에 cursor + 활성 필터 표시 */
+.cf-clickable {
   cursor: pointer;
-  font-size: 14px;
+  user-select: none;
+  transition: color 0.12s;
+}
+.cf-clickable:hover {
+  color: var(--color-primary, #F97316);
+}
+.cf-clickable.has-active-filter {
+  color: var(--color-primary, #F97316);
   font-weight: 700;
-  line-height: 1;
-  color: var(--color-text-secondary, #6b7280);
-  border-radius: 4px;
-  vertical-align: middle;
-  transition: background 0.12s, color 0.12s;
-}
-.col-filter-icon:hover {
-  background: var(--color-bg-1, #f3f4f6);
-  color: var(--color-text, #111827);
-}
-.col-filter-icon.active {
-  color: #fff;
-  background: var(--color-primary, #F97316);
-}
-/* 헤더 셀 안의 텍스트 + ▼ 정렬 */
-.inquiry-table-header > div[data-cf-key],
-.pt-table-header > div[data-cf-key] {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  white-space: nowrap;
+  border-bottom: 2px solid var(--color-primary, #F97316);
 }
 /* 필터 결과 카운트 표시 (toolbar 우측) */
 .inquiry-filter-count {

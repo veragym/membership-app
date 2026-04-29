@@ -245,9 +245,10 @@ window.ColumnFilter = (() => {
     pop.querySelector('.cf-pop-search')?.focus();
   }
 
-  function _updateIconState(iconEl, hasFilter) {
-    if (hasFilter) iconEl.classList.add('active');
-    else iconEl.classList.remove('active');
+  function _updateIconState(headerEl, hasFilter) {
+    // v2: 헤더 셀에 .has-active-filter 클래스 토글 (▼ 아이콘 대신)
+    if (hasFilter) headerEl.classList.add('has-active-filter');
+    else headerEl.classList.remove('has-active-filter');
   }
 
   function _esc(s) {
@@ -258,28 +259,27 @@ window.ColumnFilter = (() => {
   }
 
   // ─── Public API ───────────────────────────────────────
+  // v2 (2026-04-29): ▼ 아이콘 제거 — 헤더 셀 자체를 클릭하면 팝오버.
+  // 활성 필터 표시는 헤더에 .has-active-filter 클래스 부착 (CSS 측에서 주황 밑줄).
   function attach(headerEl, opts) {
-    if (!headerEl || headerEl.querySelector('.col-filter-icon')) return;
-    const icon = document.createElement('button');
-    icon.type = 'button';
-    icon.className = 'col-filter-icon';
-    icon.innerHTML = '▾';
-    icon.title = '필터';
-    if (_hasFilter(opts.tab, opts.key)) icon.classList.add('active');
-    icon.addEventListener('click', e => {
+    if (!headerEl || headerEl.dataset.cfBound === '1') return;
+    headerEl.dataset.cfBound = '1';
+    headerEl.classList.add('cf-clickable');
+    if (_hasFilter(opts.tab, opts.key)) headerEl.classList.add('has-active-filter');
+
+    headerEl.addEventListener('click', e => {
       e.stopPropagation();
       if (_activePopover) {
         const wasMine = _activePopover.dataset.tab === opts.tab && _activePopover.dataset.key === opts.key;
         _closeActivePopover();
         if (wasMine) return;
       }
-      _openPopover(icon, opts);
+      _openPopover(headerEl, opts);
       if (_activePopover) {
         _activePopover.dataset.tab = opts.tab;
         _activePopover.dataset.key = opts.key;
       }
     });
-    headerEl.appendChild(icon);
   }
 
   function get(tab, key) {

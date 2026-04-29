@@ -172,8 +172,14 @@ const InquiryTab = (() => {
     };
   }
 
+  // 컬럼별 라벨 변환 (DB 값 → 사용자 가독 라벨)
+  const _labelTransform = {
+    status: { registered: '등록', unregistered: '미등록' },
+  };
+
   // 컬럼별 unique value 추출 (count 포함) — enum 필터 옵션 자동 생성
-  function _uniqueOptions(getValue) {
+  function _uniqueOptions(getValue, columnKey) {
+    const transform = _labelTransform[columnKey] || {};
     const counts = new Map();
     allInquiries.forEach(r => {
       const v = getValue(r);
@@ -183,13 +189,13 @@ const InquiryTab = (() => {
     return Array.from(counts.entries())
       .map(([value, count]) => ({
         value,
-        label: value === '' ? '(없음)' : value,
+        label: transform[value] || (value === '' ? '(없음)' : value),
         count
       }))
       .sort((a, b) => {
         if (a.value === '') return 1;
         if (b.value === '') return -1;
-        return b.count - a.count;  // 빈도 높은 순
+        return b.count - a.count;
       });
   }
 
@@ -217,7 +223,7 @@ const InquiryTab = (() => {
         key,
         type: c.type,
         label: labelMap[key] || key,
-        getOptions: () => _uniqueOptions(c.getValue),
+        getOptions: () => _uniqueOptions(c.getValue, key),
         onChange: () => { displayLimit = PAGE_SIZE; renderList(); },
       });
     });
