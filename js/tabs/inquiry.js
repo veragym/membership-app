@@ -9,15 +9,11 @@
 const InquiryTab = (() => {
   let allInquiries = [];
   let searchQuery = '';
-  let statusFilter = 'all';     // 'all' | 'registered' | 'unregistered'
-  let categoryFilter = 'all';   // 'all' | '신규' | '재등록'
-  // v6.1: 담당자 필터 단일화 — 타입(계약/매출) + 이름 1개로 통합
-  let managerFilterType = 'contract'; // 'contract' | 'sales'
-  let managerFilterName = '';
-  // v7: 페이지네이션 — 필터 없을 때 초기 30건, "더보기"로 +30씩 증가
+  // v15: 등록상태/구분/담당자 토글 제거 → 컬럼 필터로 통합 (ColumnFilter 사용)
+  // v15: 페이지네이션 — 필터 없을 때 초기 30건, "더보기"로 +30씩 증가
   const PAGE_SIZE = 30;
   let displayLimit = PAGE_SIZE;
-  let totalCount = 0;            // 전체 행수 (count: 'exact')
+  let totalCount = 0;
   let isLoading = false;
 
   // "2026-04-17" / "2026/4/7" → "26/4/17" (리스트 표시 전용 축약 포맷)
@@ -38,24 +34,9 @@ const InquiryTab = (() => {
     pane.innerHTML = `
       <div class="inquiry-toolbar">
         <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
-        <div class="status-filter" role="group" aria-label="등록 상태 필터">
-          <button class="btn btn-chip active" data-status="all">전체</button>
-          <button class="btn btn-chip" data-status="unregistered">미등록</button>
-          <button class="btn btn-chip" data-status="registered">등록</button>
-        </div>
-        <div class="status-filter" role="group" aria-label="구분 필터">
-          <button class="btn btn-chip active" data-category="all">전체</button>
-          <button class="btn btn-chip" data-category="신규">신규</button>
-          <button class="btn btn-chip" data-category="재등록">재등록</button>
-        </div>
-        <div class="manager-filter">
-          <select id="filter-manager-type" class="filter-select">
-            <option value="contract">계약담당</option>
-            <option value="sales">매출담당</option>
-          </select>
-          <input type="text" class="filter-input" id="filter-manager-name" placeholder="담당자 이름">
-        </div>
+        <div style="flex:1;"></div>
         <div class="inquiry-toolbar-actions">
+          <button class="btn btn-secondary btn-chip-sized" id="btn-clear-filters" style="display:none;">필터 초기화</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-excel-export">엑셀 내보내기</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-excel-import">엑셀 업로드</button>
           <button class="btn btn-primary btn-chip-sized" id="btn-add-inquiry">+ 문의추가</button>
@@ -67,47 +48,15 @@ const InquiryTab = (() => {
     pane.querySelector('.search-box').addEventListener('input',
       debounce(e => {
         searchQuery = e.target.value.trim();
-        displayLimit = PAGE_SIZE;  // 필터 변경 시 페이지 리셋
-        loadInquiries();
-      }, 300)
-    );
-
-    // v6.1: 통합 담당자 필터 — 타입 드롭다운 + 이름 input
-    pane.querySelector('#filter-manager-type').addEventListener('change', e => {
-      managerFilterType = e.target.value;
-      if (managerFilterName) {
-        displayLimit = PAGE_SIZE;
-        loadInquiries();
-      }
-    });
-    pane.querySelector('#filter-manager-name').addEventListener('input',
-      debounce(e => {
-        managerFilterName = e.target.value.trim();
         displayLimit = PAGE_SIZE;
         loadInquiries();
       }, 300)
     );
 
-    // 등록 상태 필터 칩 (전체/미등록/등록)
-    pane.querySelectorAll('.status-filter[aria-label="등록 상태 필터"] .btn-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        pane.querySelectorAll('.status-filter[aria-label="등록 상태 필터"] .btn-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        statusFilter = btn.dataset.status;
-        displayLimit = PAGE_SIZE;
-        loadInquiries();
-      });
-    });
-
-    // 구분 필터 칩 (전체/신규/재등록)
-    pane.querySelectorAll('.status-filter[aria-label="구분 필터"] .btn-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        pane.querySelectorAll('.status-filter[aria-label="구분 필터"] .btn-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        categoryFilter = btn.dataset.category;
-        displayLimit = PAGE_SIZE;
-        loadInquiries();
-      });
+    pane.querySelector('#btn-clear-filters').addEventListener('click', () => {
+      ColumnFilter.clearAll('inquiry');
+      displayLimit = PAGE_SIZE;
+      renderList();
     });
 
     pane.querySelector('#btn-excel-import').addEventListener('click', () => {
@@ -119,6 +68,14 @@ const InquiryTab = (() => {
     pane.querySelector('#btn-add-inquiry').addEventListener('click', () => openInquiryForm());
   }
 
+  function _updateClearFiltersButton() {
+    const btn = document.getElementById('btn-clear-filters');
+    if (!btn) return;
+    const n = ColumnFilter.activeCount('inquiry');
+    btn.style.display = n > 0 ? '' : 'none';
+    btn.textContent = `필터 초기화 (${n})`;
+  }
+
   async function loadInquiries() {
     if (isLoading) return;
     isLoading = true;
@@ -126,15 +83,13 @@ const InquiryTab = (() => {
     listEl.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
     const hasSearch = searchQuery.length > 0;
-    const hasStatusFilter = statusFilter !== 'all';
-    const hasManagerFilter = managerFilterName.length > 0;
-    const hasAnyFilter = hasSearch || hasStatusFilter || hasManagerFilter;
+    const hasColumnFilter = ColumnFilter.activeCount('inquiry') > 0;
+    // v15: 검색 또는 컬럼 필터가 있으면 더 많이 로드 (필터 결과가 0건처럼 보이는 현상 방지)
+    const fetchLimit = (hasSearch || hasColumnFilter) ? 1000 : displayLimit;
 
-    // v7: registration join — manager 필터는 inner join 필요 (필터 걸면 등록 있는 행만)
-    const regJoinType = hasManagerFilter ? 'registrations!inner' : 'registrations';
     const selectStr = `
       *,
-      registration:${regJoinType}(
+      registration:registrations(
         registered_date, product,
         total_payment_cash, total_payment_card, total_payment,
         contract_manager, sales_manager, spt_count, spt_preferred_time
@@ -148,24 +103,11 @@ const InquiryTab = (() => {
       .order('created_at', { ascending: false });
 
     if (hasSearch) {
-      // v25: 이름/전화번호 OR 검색 — sanitizeSearch 로 %_, 일부 문자 이스케이프
       const q = sanitizeSearch(searchQuery);
       if (q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
     }
-    if (hasStatusFilter) {
-      query = query.eq('status', statusFilter);
-    }
-    if (categoryFilter !== 'all') {
-      query = query.eq('category', categoryFilter);
-    }
-    if (hasManagerFilter) {
-      const col = managerFilterType === 'contract' ? 'contract_manager' : 'sales_manager';
-      const m = sanitizeSearch(managerFilterName);  // v25: % 이스케이프 누락 수정
-      if (m) query = query.ilike(`registrations.${col}`, `%${m}%`);
-    }
 
-    // 페이지네이션: 필터 있어도 LIMIT 적용 (검색 결과도 페이지네이션)
-    query = query.range(0, displayLimit - 1);
+    query = query.range(0, fetchLimit - 1);
 
     const { data, error, count } = await query;
 
@@ -177,22 +119,17 @@ const InquiryTab = (() => {
     }
 
     // v7.1: 현재 페이지에 등장한 phone 의 "과거 문의" 까지 추가 로드 → 클라이언트 그룹핑 보장
-    //   - 페이지네이션(30건) 때문에 같은 phone 의 이력이 다른 페이지로 밀리면 아코디언이 사라지는 문제 해결
-    //   - status 필터는 과거 건에도 계승 (필터 의미 유지), manager/이름 필터는 계승 X (그룹 전체 보여야 함)
     let merged = data || [];
     const phonesOnPage = [...new Set(merged.filter(r => r.phone && r.phone.trim()).map(r => r.phone))];
-    if (phonesOnPage.length > 0) {
-      // v26: 성능 — 2차 fetch 에 전체 limit 적용 (phone × 과거 이력 폭증 방지)
-      let pastQuery = supabase
+    if (phonesOnPage.length > 0 && !hasColumnFilter) {
+      // 컬럼 필터 활성 시엔 과거 이력 추가 로드 안 함 (이미 1000건 로드됨)
+      const { data: pastData } = await supabase
         .from('inquiries')
         .select(selectStr)
         .in('phone', phonesOnPage)
         .order('inquiry_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(300);
-      if (hasStatusFilter) pastQuery = pastQuery.eq('status', statusFilter);
-      if (categoryFilter !== 'all') pastQuery = pastQuery.eq('category', categoryFilter);
-      const { data: pastData } = await pastQuery;
       if (pastData && pastData.length) {
         const seen = new Map(merged.map(r => [r.id, r]));
         pastData.forEach(r => { if (!seen.has(r.id)) seen.set(r.id, r); });
@@ -208,52 +145,125 @@ const InquiryTab = (() => {
     renderList();
   }
 
+  // ─── 컬럼 필터 설정 (v15) ──────────────────────────────
+  // 각 컬럼 별로 row 에서 값을 추출하는 방법 + 필터 타입 정의
+  function _columnFilterConfig() {
+    return {
+      inquiry_date: { type: 'date_range', getValue: r => r.inquiry_date || '' },
+      status: { type: 'enum', getValue: r => r.status || '' },
+      category: { type: 'enum', getValue: r => r.category || '' },
+      consultation_type: { type: 'enum', getValue: r => r.consultation_type || '' },
+      source: { type: 'enum', getValue: r => r.source || '' },
+      purpose: { type: 'enum', getValue: r => r.purpose || '' },
+      residence: { type: 'enum', getValue: r => r.residence || '' },
+      product: { type: 'enum', getValue: r => r.registration?.product || '' },
+      total_payment: { type: 'number_range', getValue: r => r.registration?.total_payment || 0 },
+      contract_manager: { type: 'enum', getValue: r => r.registration?.contract_manager || '' },
+      sales_manager: { type: 'enum', getValue: r => r.registration?.sales_manager || '' },
+    };
+  }
+
+  // 컬럼별 unique value 추출 (count 포함) — enum 필터 옵션 자동 생성
+  function _uniqueOptions(getValue) {
+    const counts = new Map();
+    allInquiries.forEach(r => {
+      const v = getValue(r);
+      const key = v == null ? '' : String(v);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({
+        value,
+        label: value === '' ? '(없음)' : value,
+        count
+      }))
+      .sort((a, b) => {
+        if (a.value === '') return 1;
+        if (b.value === '') return -1;
+        return b.count - a.count;  // 빈도 높은 순
+      });
+  }
+
+  function _attachColumnFilters(listEl) {
+    const cfg = _columnFilterConfig();
+    const labelMap = {
+      inquiry_date: '문의일',
+      status: '상태',
+      category: '신/재',
+      consultation_type: '상담유형',
+      source: '유입',
+      purpose: '목적',
+      residence: '거주지',
+      product: '등록상품',
+      total_payment: '총결제액',
+      contract_manager: '계약직원',
+      sales_manager: '매출담당',
+    };
+    listEl.querySelectorAll('[data-cf-key]').forEach(headerEl => {
+      const key = headerEl.dataset.cfKey;
+      const c = cfg[key];
+      if (!c) return;
+      ColumnFilter.attach(headerEl, {
+        tab: 'inquiry',
+        key,
+        type: c.type,
+        label: labelMap[key] || key,
+        getOptions: () => _uniqueOptions(c.getValue),
+        onChange: () => { displayLimit = PAGE_SIZE; renderList(); },
+      });
+    });
+  }
+
   function renderList() {
     const listEl = document.getElementById('inquiry-list');
 
-    // v7: 필터는 서버에서 처리됨 — 클라이언트는 phone 그룹핑만 수행
-    //    phone이 null/빈값인 행은 id를 키로 사용해 개별 그룹 처리
+    // v15: 컬럼 필터 적용 (allInquiries → 필터 통과한 행만)
+    const filteredInquiries = ColumnFilter.apply('inquiry', allInquiries, _columnFilterConfig());
+
+    // phone 그룹핑 (phone null/빈값인 행은 id 키)
     const groups = new Map();
-    allInquiries.forEach(inq => {
+    filteredInquiries.forEach(inq => {
       const key = inq.phone && inq.phone.trim() !== '' ? inq.phone : `__no_phone__${inq.id}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(inq);
     });
 
-    const loadedRows = allInquiries.length;
+    const loadedRows = filteredInquiries.length;
 
     if (groups.size === 0) {
-      const emptyMsg = statusFilter !== 'all'
-        ? `${statusFilter === 'registered' ? '등록' : '미등록'} 상태의 문의가 없습니다.`
+      const emptyMsg = ColumnFilter.activeCount('inquiry') > 0
+        ? '필터 조건에 맞는 문의가 없습니다.'
         : '문의 내역이 없습니다.';
       listEl.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
+      _updateClearFiltersButton();
       return;
     }
 
-    // PC 테이블 헤더 (1024px 초과에서만 보임) + 카드 컨테이너
-    // 스펙 35행: 액션 버튼 옆에 등록 6필드 병치 (미등록이면 "-")
+    // PC 테이블 헤더 — 컬럼 필터 ▼ 부착됨 (필터 적용 컬럼만)
     listEl.innerHTML = `
       <div class="inquiry-table-header">
-        <div class="col-date">문의일</div>
+        <div class="col-date" data-cf-key="inquiry_date">문의일</div>
         <div class="col-name">이름</div>
         <div class="col-phone">전화번호</div>
-        <div class="col-status">상태</div>
-        <div class="col-tag">신/재</div>
-        <div class="col-tag">상담유형</div>
-        <div class="col-tag">유입</div>
-        <div class="col-tag">목적</div>
-        <div class="col-residence">거주지</div>
+        <div class="col-status" data-cf-key="status">상태</div>
+        <div class="col-tag" data-cf-key="category">신/재</div>
+        <div class="col-tag" data-cf-key="consultation_type">상담유형</div>
+        <div class="col-tag" data-cf-key="source">유입</div>
+        <div class="col-tag" data-cf-key="purpose">목적</div>
+        <div class="col-residence" data-cf-key="residence">거주지</div>
         <div class="col-content">내용</div>
         <div class="col-actions">액션</div>
-        <div class="col-reg-product">등록상품</div>
-        <div class="col-reg-payment">총결제액</div>
-        <div class="col-reg-contract">계약직원</div>
-        <div class="col-reg-manager">매출담당</div>
+        <div class="col-reg-product" data-cf-key="product">등록상품</div>
+        <div class="col-reg-payment" data-cf-key="total_payment">총결제액</div>
+        <div class="col-reg-contract" data-cf-key="contract_manager">계약직원</div>
+        <div class="col-reg-manager" data-cf-key="sales_manager">매출담당</div>
         <div class="col-reg-spt" title="SPT횟수">SPT</div>
         <div class="col-reg-time" title="SPT희망시간">희망시간</div>
       </div>
       <div class="inquiry-list-body"></div>
     `;
+    _attachColumnFilters(listEl);
+    _updateClearFiltersButton();
     const bodyEl = listEl.querySelector('.inquiry-list-body');
 
     // v7: DocumentFragment 로 배치 append (개별 appendChild reflow 제거)
@@ -296,14 +306,16 @@ const InquiryTab = (() => {
     });
     bodyEl.appendChild(frag);
 
-    // v7: 더보기 (+30) — 필터 없을 때만 노출. 필터 중이면 LIMIT 증가만 가능
-    if (loadedRows < totalCount) {
+    // v15: 더보기 — 검색/필터 없을 때만 노출 (필터 시엔 1000건 일괄 로드라 불필요)
+    const hasFilterOrSearch = searchQuery.length > 0 || ColumnFilter.activeCount('inquiry') > 0;
+    const fetchedRows = allInquiries.length;
+    if (!hasFilterOrSearch && fetchedRows < totalCount) {
       const moreWrap = document.createElement('div');
       moreWrap.className = 'inquiry-more-wrap';
       moreWrap.style.cssText = 'text-align:center; padding:16px 0;';
       const moreBtn = document.createElement('button');
       moreBtn.className = 'btn btn-secondary';
-      const remaining = totalCount - loadedRows;
+      const remaining = totalCount - fetchedRows;
       const next = Math.min(PAGE_SIZE, remaining);
       moreBtn.textContent = `더보기 (+${next}건, 남은 ${remaining.toLocaleString()}건)`;
       moreBtn.addEventListener('click', () => {
