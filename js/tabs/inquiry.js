@@ -36,6 +36,7 @@ const InquiryTab = (() => {
         <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
         <div style="flex:1;"></div>
         <div class="inquiry-toolbar-actions">
+          <span class="inquiry-filter-count" id="inquiry-filter-count" style="display:none;"></span>
           <button class="btn btn-secondary btn-chip-sized" id="btn-clear-filters" style="display:none;">필터 초기화</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-excel-export">엑셀 내보내기</button>
           <button class="btn btn-secondary btn-chip-sized" id="btn-excel-import">엑셀 업로드</button>
@@ -68,12 +69,20 @@ const InquiryTab = (() => {
     pane.querySelector('#btn-add-inquiry').addEventListener('click', () => openInquiryForm());
   }
 
-  function _updateClearFiltersButton() {
+  function _updateClearFiltersButton(filteredCount, totalLoadedCount) {
     const btn = document.getElementById('btn-clear-filters');
-    if (!btn) return;
+    const countEl = document.getElementById('inquiry-filter-count');
+    if (!btn || !countEl) return;
     const n = ColumnFilter.activeCount('inquiry');
-    btn.style.display = n > 0 ? '' : 'none';
-    btn.textContent = `필터 초기화 (${n})`;
+    if (n > 0) {
+      btn.style.display = '';
+      btn.textContent = `필터 초기화 (${n})`;
+      countEl.style.display = '';
+      countEl.innerHTML = `<strong>${(filteredCount ?? 0).toLocaleString()}</strong>건 일치 / 전체 <strong>${(totalLoadedCount ?? 0).toLocaleString()}</strong>건`;
+    } else {
+      btn.style.display = 'none';
+      countEl.style.display = 'none';
+    }
   }
 
   async function loadInquiries() {
@@ -153,8 +162,8 @@ const InquiryTab = (() => {
       status: { type: 'enum', getValue: r => r.status || '' },
       category: { type: 'enum', getValue: r => r.category || '' },
       consultation_type: { type: 'enum', getValue: r => r.consultation_type || '' },
-      source: { type: 'enum', getValue: r => r.source || '' },
-      purpose: { type: 'enum', getValue: r => r.purpose || '' },
+      inflow_channel: { type: 'enum', getValue: r => r.inflow_channel || '' },
+      consultation_purpose: { type: 'enum', getValue: r => r.consultation_purpose || '' },
       residence: { type: 'enum', getValue: r => r.residence || '' },
       product: { type: 'enum', getValue: r => r.registration?.product || '' },
       total_payment: { type: 'number_range', getValue: r => r.registration?.total_payment || 0 },
@@ -191,8 +200,8 @@ const InquiryTab = (() => {
       status: '상태',
       category: '신/재',
       consultation_type: '상담유형',
-      source: '유입',
-      purpose: '목적',
+      inflow_channel: '유입',
+      consultation_purpose: '목적',
       residence: '거주지',
       product: '등록상품',
       total_payment: '총결제액',
@@ -235,7 +244,7 @@ const InquiryTab = (() => {
         ? '필터 조건에 맞는 문의가 없습니다.'
         : '문의 내역이 없습니다.';
       listEl.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
-      _updateClearFiltersButton();
+      _updateClearFiltersButton(0, allInquiries.length);
       return;
     }
 
@@ -248,8 +257,8 @@ const InquiryTab = (() => {
         <div class="col-status" data-cf-key="status">상태</div>
         <div class="col-tag" data-cf-key="category">신/재</div>
         <div class="col-tag" data-cf-key="consultation_type">상담유형</div>
-        <div class="col-tag" data-cf-key="source">유입</div>
-        <div class="col-tag" data-cf-key="purpose">목적</div>
+        <div class="col-tag" data-cf-key="inflow_channel">유입</div>
+        <div class="col-tag" data-cf-key="consultation_purpose">목적</div>
         <div class="col-residence" data-cf-key="residence">거주지</div>
         <div class="col-content">내용</div>
         <div class="col-actions">액션</div>
@@ -263,7 +272,7 @@ const InquiryTab = (() => {
       <div class="inquiry-list-body"></div>
     `;
     _attachColumnFilters(listEl);
-    _updateClearFiltersButton();
+    _updateClearFiltersButton(filteredInquiries.length, allInquiries.length);
     const bodyEl = listEl.querySelector('.inquiry-list-body');
 
     // v7: DocumentFragment 로 배치 append (개별 appendChild reflow 제거)
