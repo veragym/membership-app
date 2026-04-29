@@ -592,14 +592,104 @@ const StatsTab = (() => {
     ].join('\n');
   }
 
-  // ───────── [기간별 비교] placeholder ─────────
+  // ───────── [기간별 비교] — 전월 대비 문의량 ─────────
   async function renderCompare(container) {
+    container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+    const now = new Date();
+    const cy = now.getFullYear();
+    const cm = now.getMonth() + 1;          // 1-12
+    const cd = now.getDate();
+
+    const cmFrom = `${cy}-${String(cm).padStart(2,'0')}-01`;
+    const cmTo   = isoDate(now);
+
+    // 전월 같은 기간 (전월 1일 ~ 전월 같은 일자, 일자 클램프)
+    const prevY = cm === 1 ? cy - 1 : cy;
+    const prevM = cm === 1 ? 12 : cm - 1;
+    const prevMonthLastDay = new Date(prevY, prevM, 0).getDate();   // 전월 말일
+    const prevDay = Math.min(cd, prevMonthLastDay);
+    const pmFrom = `${prevY}-${String(prevM).padStart(2,'0')}-01`;
+    const pmTo   = `${prevY}-${String(prevM).padStart(2,'0')}-${String(prevDay).padStart(2,'0')}`;
+
+    // 이번 달 + 전월 동시 fetch
+    const [cmRes, pmRes] = await Promise.all([
+      supabase.from('inquiries').select('status').gte('inquiry_date', cmFrom).lte('inquiry_date', cmTo),
+      supabase.from('inquiries').select('status').gte('inquiry_date', pmFrom).lte('inquiry_date', pmTo),
+    ]);
+    const cmData = cmRes.data || [];
+    const pmData = pmRes.data || [];
+
+    const cmReg   = cmData.filter(r => r.status === 'registered').length;
+    const cmUnreg = cmData.length - cmReg;
+    const pmReg   = pmData.filter(r => r.status === 'registered').length;
+    const pmUnreg = pmData.length - pmReg;
+
+    const diffStr = (cur, prev) => {
+      const d = cur - prev;
+      const pct = prev > 0 ? (d / prev * 100) : (cur > 0 ? 100 : 0);
+      const sign = d > 0 ? '+' : (d < 0 ? '' : '±');
+      const cls = d > 0 ? 'pos' : (d < 0 ? 'neg' : 'flat');
+      return `<span class="cmp-diff ${cls}">${sign}${d.toLocaleString()} <small>(${sign}${pct.toFixed(1)}%)</small></span>`;
+    };
+
+    const fmtRange = (from, to) => {
+      const f = from.split('-'), t = to.split('-');
+      return `${parseInt(f[1])}/${parseInt(f[2])} ~ ${parseInt(t[1])}/${parseInt(t[2])}`;
+    };
+
     container.innerHTML = `
-      <div class="empty-state" style="padding:48px;">
-        <div style="font-size:32px;">📅</div>
-        <div style="margin-top:12px; font-weight:600;">기간별 비교</div>
-        <div style="margin-top:8px; color:var(--color-text-muted);">
-          추후 구현 예정 — 두 기간 선택 후 FC/PT 매출·건수·전환율 비교
+      <div class="cmp-card">
+        <div class="cmp-card-header">
+          <div class="cmp-card-title">전월 대비 문의량</div>
+          <div class="cmp-card-sub">
+            이번 달 <strong>${fmtRange(cmFrom, cmTo)}</strong> vs
+            전월 <strong>${fmtRange(pmFrom, pmTo)}</strong> 같은 기간
+          </div>
+        </div>
+        <table class="cmp-table">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>이번 달 (${cm}월)</th>
+              <th>전월 (${prevM}월)</th>
+              <th>증감</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>미등록 문의</td>
+              <td class="cmp-num">${cmUnreg.toLocaleString()}건</td>
+              <td class="cmp-num">${pmUnreg.toLocaleString()}건</td>
+              <td>${diffStr(cmUnreg, pmUnreg)}</td>
+            </tr>
+            <tr>
+              <td>등록 완료</td>
+              <td class="cmp-num">${cmReg.toLocaleString()}건</td>
+              <td class="cmp-num">${pmReg.toLocaleString()}건</td>
+              <td>${diffStr(cmReg, pmReg)}</td>
+            </tr>
+            <tr class="cmp-total">
+              <td>합계</td>
+              <td class="cmp-num">${cmData.length.toLocaleString()}건</td>
+              <td class="cmp-num">${pmData.length.toLocaleString()}건</td>
+              <td>${diffStr(cmData.length, pmData.length)}</td>
+            </tr>
+            <tr>
+              <td>등록 전환율</td>
+              <td class="cmp-num">${cmData.length > 0 ? (cmReg / cmData.length * 100).toFixed(1) : '0.0'}%</td>
+              <td class="cmp-num">${pmData.length > 0 ? (pmReg / pmData.length * 100).toFixed(1) : '0.0'}%</td>
+              <td>${diffStr(
+                Number(cmData.length > 0 ? (cmReg / cmData.length * 1000) : 0),
+                Number(pmData.length > 0 ? (pmReg / pmData.length * 1000) : 0)
+              ).replace(/건/g, '')}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="cmp-note">
+          · 미등록 = inquiries.status &lt;&gt; 'registered' (모든 신규/재등록 문의 포함)<br>
+          · 등록 = inquiries.status = 'registered'<br>
+          · 전월은 같은 일자까지만 비교 (월말 비교 정확)
         </div>
       </div>
     `;

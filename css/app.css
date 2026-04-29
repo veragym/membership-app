@@ -4890,3 +4890,84 @@ html, body {
   border-color: var(--color-primary, #F97316);
 }
 .cf-btn-primary:hover { background: var(--color-primary-dark, #EA580C); }
+
+/* ─── 통계 탭 - 전월 대비 문의량 카드 (v15, 2026-04-29) ─── */
+.cmp-card {
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin: 16px 0;
+}
+.cmp-card-header {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-divider);
+  padding-bottom: 10px;
+}
+.cmp-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.cmp-card-sub {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.cmp-card-sub strong {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cmp-table th, .cmp-table td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--color-divider);
+}
+.cmp-table th {
+  background: var(--color-bg-1);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.cmp-table td:first-child, .cmp-table th:first-child {
+  text-align: left;
+  width: 130px;
+}
+.cmp-table .cmp-num {
+  font-weight: 600;
+  font-feature-settings: "tnum";
+}
+.cmp-table .cmp-total {
+  background: var(--color-bg-0);
+}
+.cmp-table .cmp-total td {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.cmp-diff {
+  font-weight: 600;
+  font-feature-settings: "tnum";
+}
+.cmp-diff.pos { color: #16A34A; }
+.cmp-diff.neg { color: #DC2626; }
+.cmp-diff.flat { color: var(--color-text-muted); }
+.cmp-diff small {
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 2px;
+}
+.cmp-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--color-bg-0);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
