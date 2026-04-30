@@ -600,7 +600,7 @@ const SettingsTab = (() => {
     const listEl = document.getElementById('settings-option-list');
     const { data, error } = await supabase
       .from('sms_templates')
-      .select('id, name, category, msg, msg_type, title, send_once, sort_order, is_active, auto_send, delay_days, registration_category, expiry_target, expiry_offset_days')
+      .select('id, name, category, msg, msg_type, title, send_once, send_once_days, sort_order, is_active, auto_send, delay_days, registration_category, expiry_target, expiry_offset_days')
       .order('is_active', { ascending: false })
       .order('sort_order', { ascending: true });
     if (error) {
@@ -703,7 +703,7 @@ const SettingsTab = (() => {
 
   function buildTemplateForm(tpl) {
     const isEdit = !!tpl;
-    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, msg_type: 'auto', title: '', auto_send: false, delay_days: 1, registration_category: null, expiry_target: null, expiry_offset_days: -7 };
+    const t = tpl || { name: '', category: 'general', msg: '', send_once: false, send_once_days: null, msg_type: 'auto', title: '', auto_send: false, delay_days: 1, registration_category: null, expiry_target: null, expiry_offset_days: -7 };
     const catOptions = SMS_TPL_CATEGORIES.map(c =>
       `<option value="${c.value}" ${c.value === t.category ? 'selected' : ''}>${c.label}</option>`
     ).join('');
@@ -732,10 +732,25 @@ const SettingsTab = (() => {
         </div>
         <div class="form-group">
           <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; border:1px solid var(--color-border);">
-            <input type="checkbox" name="send_once" ${t.send_once ? 'checked' : ''}
+            <input type="checkbox" name="send_once" id="tpl-send-once" ${t.send_once ? 'checked' : ''}
               style="width:18px; height:18px; flex-shrink:0; accent-color:var(--color-primary, #F97316); margin:0;">
-            <span style="font-size:14px;"><strong>1회 한정 템플릿</strong> — 같은 회원에게 1번만 발송 (재발송 시 경고)</span>
+            <span style="font-size:14px;"><strong>1회 한정 템플릿</strong> — 같은 회원에게 중복 발송 방지</span>
           </label>
+          <div id="tpl-once-days-row" style="margin-top:8px; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; ${t.send_once ? '' : 'opacity:0.5;'}">
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+              <span>최근</span>
+              <input type="number" name="send_once_days" id="tpl-once-days-input" min="1" max="3650"
+                value="${t.send_once_days != null ? t.send_once_days : ''}"
+                placeholder="비우면 평생"
+                ${t.send_once ? '' : 'disabled'}
+                style="width:80px; padding:6px 10px; font-size:13px;">
+              <span>일 내만 중복 검사</span>
+            </label>
+            <div style="margin-top:6px; font-size:11px; color:var(--color-text-secondary, #6b7280);">
+              · 비우면 평생 1회 (회원이 한 번 받으면 같은 템플릿 재발송 X)<br>
+              · 15 입력 시 — 락커/회원권 재등록 회원에게 16일 후 재발송 가능 (권장)
+            </div>
+          </div>
         </div>
         <div class="form-group" id="tpl-auto-section">
           <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 12px; background:var(--color-bg-0); border-radius:8px; border:1px solid var(--color-border);">
@@ -851,6 +866,19 @@ const SettingsTab = (() => {
     catSel.addEventListener('change', update);
     autoCheck.addEventListener('change', update);
     if (expiryOffsetInput) expiryOffsetInput.addEventListener('input', updateOffsetHint);
+
+    // 1회 한정 + 일수 입력 토글
+    const sendOnceCheck = el.querySelector('#tpl-send-once');
+    const onceDaysRow = el.querySelector('#tpl-once-days-row');
+    const onceDaysInput = el.querySelector('#tpl-once-days-input');
+    if (sendOnceCheck && onceDaysRow && onceDaysInput) {
+      sendOnceCheck.addEventListener('change', () => {
+        const on = sendOnceCheck.checked;
+        onceDaysRow.style.opacity = on ? '1' : '0.5';
+        onceDaysInput.disabled = !on;
+        if (!on) onceDaysInput.value = '';
+      });
+    }
   }
 
   function extractTemplateFormData(form) {
@@ -871,11 +899,18 @@ const SettingsTab = (() => {
     const expOffsetRaw = fd.get('expiry_offset_days');
     const expiryOffsetDays = (autoSend && isExpiry && expOffsetRaw !== '' && expOffsetRaw != null)
       ? parseInt(expOffsetRaw, 10) : null;
+    // send_once_days — send_once 가 ON 일 때만 의미. 빈 값이면 NULL (평생).
+    const sendOnce = fd.get('send_once') === 'on';
+    const sendOnceDaysRaw = (fd.get('send_once_days') || '').trim();
+    const sendOnceDays = (sendOnce && sendOnceDaysRaw)
+      ? Math.max(1, Math.min(3650, parseInt(sendOnceDaysRaw, 10) || 0)) || null
+      : null;
     return {
       name: fd.get('name').trim(),
       category,
       msg: fd.get('msg').trim(),
-      send_once: fd.get('send_once') === 'on',
+      send_once: sendOnce,
+      send_once_days: sendOnceDays,
       auto_send: autoSend,
       delay_days: delayDays,
       registration_category: registrationCategory,
