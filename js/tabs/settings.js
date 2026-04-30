@@ -25,6 +25,7 @@ const SettingsTab = (() => {
     { key: '매출담당자',   desc: '매출 담당 직원' },
     { key: '업무카테고리', desc: '업무관리 카테고리 (색상 지정 가능)' },
     { key: '문자 템플릿',  desc: 'SMS 발송 템플릿 (1회 한정 옵션 / 변수 지원)' },
+    { key: '문자 발송 이력', desc: '실제 발송된 SMS 이력 조회 (알리고 콘솔 동기화)' },
   ];
 
   // 색상 필수 카테고리 — 추가/수정 폼에 color picker 노출
@@ -120,6 +121,7 @@ const SettingsTab = (() => {
     // 옵션 추가
     pane.querySelector('#btn-add-option').addEventListener('click', () => {
       if (activeCategory === '문자 템플릿') openAddTemplate();
+      else if (activeCategory === '문자 발송 이력') return;  // 이력 화면에는 추가 버튼 동작 없음
       else openAddForm();
     });
   }
@@ -128,9 +130,18 @@ const SettingsTab = (() => {
     const listEl = document.getElementById('settings-option-list');
     listEl.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
+    // [+ 옵션 추가] 버튼 — '문자 발송 이력' 카테고리에선 숨김
+    const addBtn = document.getElementById('btn-add-option');
+    if (addBtn) addBtn.style.display = (category === '문자 발송 이력') ? 'none' : '';
+
     // 분기: SMS 템플릿
     if (category === '문자 템플릿') {
       await loadSmsTemplates();
+      return;
+    }
+    // 분기: SMS 발송 이력
+    if (category === '문자 발송 이력') {
+      await loadSmsLogs();
       return;
     }
 
@@ -966,6 +977,229 @@ const SettingsTab = (() => {
           await loadSmsTemplates();
         });
       }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  SMS 발송 이력 (sms_logs 조회)
+  // ═══════════════════════════════════════════════════════════
+  let _smsLogsState = {
+    period: '7d',           // today / 7d / 30d / custom
+    fromDate: '',
+    toDate: '',
+    resultFilter: 'all',    // all / success / fail
+    search: '',             // 이름/번호 부분 검색
+    templateId: '',         // 템플릿 필터
+    page: 1,
+    pageSize: 50,
+  };
+
+  function _smsLogsDateRange() {
+    const today = new Date();
+    const iso = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${dd}`;
+    };
+    const todayStr = iso(today);
+    if (_smsLogsState.period === 'today') return [todayStr, todayStr];
+    if (_smsLogsState.period === '7d') {
+      const d = new Date(today); d.setDate(d.getDate()-6);
+      return [iso(d), todayStr];
+    }
+    if (_smsLogsState.period === '30d') {
+      const d = new Date(today); d.setDate(d.getDate()-29);
+      return [iso(d), todayStr];
+    }
+    if (_smsLogsState.period === 'custom') {
+      return [_smsLogsState.fromDate || todayStr, _smsLogsState.toDate || todayStr];
+    }
+    return [todayStr, todayStr];
+  }
+
+  async function loadSmsLogs() {
+    const listEl = document.getElementById('settings-option-list');
+    listEl.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+    // 템플릿 목록 캐시 (필터 select 용)
+    let allTemplates = [];
+    try {
+      const { data } = await supabase
+        .from('sms_templates').select('id, name').order('name');
+      allTemplates = data || [];
+    } catch (e) { /* ignore */ }
+
+    const [from, to] = _smsLogsDateRange();
+    let q = supabase
+      .from('sms_logs')
+      .select('id, sender, receiver, receiver_name, msg_type, title, msg, result_code, result_message, msg_id, sent_by, template_id, related_table, created_at, sms_templates(name)', { count: 'exact' })
+      .gte('created_at', from + 'T00:00:00')
+      .lte('created_at', to + 'T23:59:59')
+      .order('created_at', { ascending: false });
+
+    if (_smsLogsState.resultFilter === 'success') q = q.gt('result_code', 0);
+    else if (_smsLogsState.resultFilter === 'fail') q = q.lte('result_code', 0);
+
+    if (_smsLogsState.search) {
+      const s = _smsLogsState.search.replace(/[%_,()]/g, '');
+      if (s) q = q.or(`receiver.ilike.%${s}%,receiver_name.ilike.%${s}%`);
+    }
+    if (_smsLogsState.templateId) q = q.eq('template_id', _smsLogsState.templateId);
+
+    const fromIdx = (_smsLogsState.page - 1) * _smsLogsState.pageSize;
+    q = q.range(fromIdx, fromIdx + _smsLogsState.pageSize - 1);
+
+    const { data, error, count } = await q;
+    if (error) {
+      listEl.innerHTML = `<div class="empty-state">로드 실패: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    const logs = data || [];
+    const total = count || 0;
+
+    // 통계 카드 — 같은 기간 전체 통계 (페이지 무관)
+    let statsQ = supabase.from('sms_logs')
+      .select('result_code', { count: 'exact', head: false })
+      .gte('created_at', from + 'T00:00:00')
+      .lte('created_at', to + 'T23:59:59');
+    const { data: statsData } = await statsQ;
+    const totalCount = (statsData || []).length;
+    const successCount = (statsData || []).filter(r => (r.result_code||0) > 0).length;
+    const failCount = totalCount - successCount;
+    const successRate = totalCount > 0 ? (successCount / totalCount * 100).toFixed(1) : '0.0';
+
+    const fmtDateTime = (s) => {
+      if (!s) return '';
+      const d = new Date(s);
+      const M = d.getMonth()+1, D = d.getDate(), h = d.getHours(), m = d.getMinutes();
+      return `${M}/${D} ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    };
+    const fmtPhone = (p) => {
+      const digits = (p||'').replace(/\D/g,'');
+      if (digits.length === 11) return `${digits.slice(0,3)}-${digits.slice(3,7)}-${digits.slice(7)}`;
+      if (digits.length === 10) return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`;
+      return p || '';
+    };
+
+    const tplOptions = ['<option value="">전체 템플릿</option>',
+      ...allTemplates.map(t => `<option value="${t.id}" ${_smsLogsState.templateId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`)
+    ].join('');
+
+    const periodChip = (val, label) =>
+      `<button class="btn btn-chip ${_smsLogsState.period===val?'active':''}" data-sms-period="${val}">${label}</button>`;
+
+    const resultChip = (val, label) =>
+      `<button class="btn btn-chip ${_smsLogsState.resultFilter===val?'active':''}" data-sms-result="${val}">${label}</button>`;
+
+    listEl.innerHTML = `
+      <div class="sms-logs-toolbar">
+        <div class="sms-logs-stats">
+          <div class="sms-stat-card"><div class="sms-stat-label">총 발송</div><div class="sms-stat-val">${totalCount.toLocaleString()}건</div></div>
+          <div class="sms-stat-card sms-stat-success"><div class="sms-stat-label">성공</div><div class="sms-stat-val">${successCount.toLocaleString()}건</div></div>
+          <div class="sms-stat-card sms-stat-fail"><div class="sms-stat-label">실패</div><div class="sms-stat-val">${failCount.toLocaleString()}건</div></div>
+          <div class="sms-stat-card"><div class="sms-stat-label">성공률</div><div class="sms-stat-val">${successRate}%</div></div>
+        </div>
+
+        <div class="sms-logs-filters">
+          <div class="status-filter" role="group" aria-label="기간 필터">
+            ${periodChip('today','오늘')}
+            ${periodChip('7d','7일')}
+            ${periodChip('30d','30일')}
+            ${periodChip('custom','직접')}
+          </div>
+          <div id="sms-custom-range" style="${_smsLogsState.period==='custom'?'':'display:none'}; gap:6px; align-items:center; display:${_smsLogsState.period==='custom'?'flex':'none'};">
+            <input type="date" id="sms-from" value="${_smsLogsState.fromDate}">
+            <span>~</span>
+            <input type="date" id="sms-to" value="${_smsLogsState.toDate}">
+          </div>
+          <div class="status-filter" role="group" aria-label="결과 필터">
+            ${resultChip('all','전체')}
+            ${resultChip('success','성공')}
+            ${resultChip('fail','실패')}
+          </div>
+          <select id="sms-tpl-filter" class="filter-select">${tplOptions}</select>
+          <input type="text" id="sms-search" class="filter-input" placeholder="이름/번호 검색" value="${escapeHtml(_smsLogsState.search)}" style="min-width:140px;">
+        </div>
+      </div>
+
+      <div class="sms-logs-list">
+        <div class="sms-log-header">
+          <div class="col-time">시각</div>
+          <div class="col-name">받는 사람</div>
+          <div class="col-phone">번호</div>
+          <div class="col-msg">메시지</div>
+          <div class="col-tpl">템플릿</div>
+          <div class="col-result">결과</div>
+        </div>
+        ${logs.length === 0 ? '<div class="empty-state">발송 이력 없음</div>' :
+          logs.map(r => {
+            const ok = (r.result_code||0) > 0;
+            const tplName = r.sms_templates?.name || (r.template_id ? '(삭제됨)' : '(직접발송)');
+            const msgPreview = (r.msg||'').replace(/\n/g,' ').slice(0,80);
+            const msgFull = (r.msg||'').replace(/\n/g,' ');
+            return `
+              <div class="sms-log-row ${ok?'':'is-fail'}" title="${escapeHtml(msgFull)}">
+                <div class="col-time">${fmtDateTime(r.created_at)}</div>
+                <div class="col-name">${escapeHtml(r.receiver_name||'-')}</div>
+                <div class="col-phone">${escapeHtml(fmtPhone(r.receiver))}</div>
+                <div class="col-msg">${escapeHtml(msgPreview)}${msgFull.length > 80 ? '…' : ''}</div>
+                <div class="col-tpl">${escapeHtml(tplName)} <span class="msg-type-pill">${escapeHtml(r.msg_type||'')}</span></div>
+                <div class="col-result">${ok ? '<span class="result-ok">✓ 성공</span>' : `<span class="result-fail">✗ ${escapeHtml(r.result_message||r.result_code||'실패')}</span>`}</div>
+              </div>`;
+          }).join('')}
+      </div>
+
+      ${total > _smsLogsState.pageSize ? `
+        <div class="sms-logs-pager">
+          <button class="btn btn-secondary" id="sms-prev" ${_smsLogsState.page<=1?'disabled':''}>← 이전</button>
+          <span>${_smsLogsState.page} / ${Math.ceil(total/_smsLogsState.pageSize)} 페이지 (총 ${total.toLocaleString()}건)</span>
+          <button class="btn btn-secondary" id="sms-next" ${_smsLogsState.page*_smsLogsState.pageSize >= total?'disabled':''}>다음 →</button>
+        </div>` : ''}
+    `;
+
+    // 이벤트 바인딩
+    listEl.querySelectorAll('[data-sms-period]').forEach(b => b.addEventListener('click', () => {
+      _smsLogsState.period = b.dataset.smsPeriod;
+      _smsLogsState.page = 1;
+      loadSmsLogs();
+    }));
+    listEl.querySelectorAll('[data-sms-result]').forEach(b => b.addEventListener('click', () => {
+      _smsLogsState.resultFilter = b.dataset.smsResult;
+      _smsLogsState.page = 1;
+      loadSmsLogs();
+    }));
+    listEl.querySelector('#sms-tpl-filter')?.addEventListener('change', e => {
+      _smsLogsState.templateId = e.target.value;
+      _smsLogsState.page = 1;
+      loadSmsLogs();
+    });
+    let searchTimer = null;
+    listEl.querySelector('#sms-search')?.addEventListener('input', e => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        _smsLogsState.search = e.target.value.trim();
+        _smsLogsState.page = 1;
+        loadSmsLogs();
+      }, 300);
+    });
+    listEl.querySelector('#sms-from')?.addEventListener('change', e => {
+      _smsLogsState.fromDate = e.target.value;
+      _smsLogsState.page = 1;
+      loadSmsLogs();
+    });
+    listEl.querySelector('#sms-to')?.addEventListener('change', e => {
+      _smsLogsState.toDate = e.target.value;
+      _smsLogsState.page = 1;
+      loadSmsLogs();
+    });
+    listEl.querySelector('#sms-prev')?.addEventListener('click', () => {
+      _smsLogsState.page = Math.max(1, _smsLogsState.page - 1);
+      loadSmsLogs();
+    });
+    listEl.querySelector('#sms-next')?.addEventListener('click', () => {
+      _smsLogsState.page += 1;
+      loadSmsLogs();
     });
   }
 

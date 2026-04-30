@@ -5037,3 +5037,123 @@ html, body {
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border);
 }
+
+/* ─── SMS 발송 이력 (설정 탭, v15.2) ─── */
+.sms-logs-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
+}
+.sms-logs-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sms-stat-card {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 14px;
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.sms-stat-card.sms-stat-success { border-color: #BBF7D0; background: #F0FDF4; }
+.sms-stat-card.sms-stat-fail    { border-color: #FECACA; background: #FEF2F2; }
+.sms-stat-label { font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px; }
+.sms-stat-val   { font-size: 16px; font-weight: 700; color: var(--color-text-primary); }
+.sms-stat-success .sms-stat-val { color: #16A34A; }
+.sms-stat-fail    .sms-stat-val { color: #DC2626; }
+
+.sms-logs-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.sms-logs-filters .filter-select {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-1);
+}
+.sms-logs-filters .filter-input {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+.sms-logs-filters input[type="date"] {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.sms-logs-list { margin-top: 8px; }
+:root { --sms-log-cols: 90px 110px 130px 1fr 200px 130px; }
+.sms-log-header {
+  display: grid;
+  grid-template-columns: var(--sms-log-cols);
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.sms-log-header > div,
+.sms-log-row > div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sms-log-row {
+  display: grid;
+  grid-template-columns: var(--sms-log-cols);
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--color-divider);
+  align-items: center;
+}
+.sms-log-row:hover { background: var(--color-bg-0); }
+.sms-log-row > div + div {
+  border-left: 1px solid var(--color-divider);
+  padding-left: 6px;
+}
+.sms-log-row.is-fail { background: #FEF2F2; }
+.sms-log-row .col-time   { color: var(--color-text-muted); font-feature-settings: "tnum"; }
+.sms-log-row .col-phone  { color: var(--color-text-secondary); font-feature-settings: "tnum"; }
+.sms-log-row .col-msg    { color: var(--color-text-primary); }
+.sms-log-row .result-ok    { color: #16A34A; font-weight: 600; }
+.sms-log-row .result-fail  { color: #DC2626; font-weight: 600; }
+
+.msg-type-pill {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  background: var(--color-bg-2);
+  color: var(--color-text-muted);
+  border-radius: 4px;
+}
+
+.sms-logs-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
