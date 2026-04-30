@@ -741,9 +741,9 @@ const SettingsTab = (() => {
               <span>최근</span>
               <input type="number" name="send_once_days" id="tpl-once-days-input" min="1" max="3650"
                 value="${t.send_once_days != null ? t.send_once_days : ''}"
-                placeholder="비우면 평생"
+                placeholder="예: 15"
                 ${t.send_once ? '' : 'disabled'}
-                style="width:80px; padding:6px 10px; font-size:13px;">
+                style="width:90px; padding:6px 10px; font-size:13px; text-align:center;">
               <span>일 내만 중복 검사</span>
             </label>
             <div style="margin-top:6px; font-size:11px; color:var(--color-text-secondary, #6b7280);">
