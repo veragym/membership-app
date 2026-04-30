@@ -1084,6 +1084,26 @@ const InquiryTab = (() => {
       return;
     }
 
+    // v15.3: 회원명 변경 시 pt_registrations + members 도 동기화 (같은 phone 기준)
+    // 회원관리 탭에서 이름 수정 → PT 등록 회원, PT관리앱(members) 모두 자동 변경
+    if (existing && payload.phone && payload.name && payload.name !== existing.name) {
+      try {
+        const newName = payload.name;
+        const phone = payload.phone;
+        // pt_registrations 동기화 (phone 매칭)
+        await supabase.from('pt_registrations')
+          .update({ name: newName })
+          .eq('phone', phone);
+        // members 동기화 (phone 매칭) — PT관리앱 트레이너 화면에 반영
+        await supabase.from('members')
+          .update({ name: newName })
+          .eq('phone', phone);
+        console.info(`[name-sync] ${existing.name} → ${newName} (phone=${phone}) — pt_registrations / members 동기화 완료`);
+      } catch (e) {
+        console.warn('[name-sync] 동기화 실패 (inquiry 저장은 성공):', e);
+      }
+    }
+
     // v7: 등록 동시 진행이면 registrations INSERT
     if (isRegistered && newInquiryId) {
       // SPT 횟수: 빈 값 / 비숫자는 null. 0 허용.
