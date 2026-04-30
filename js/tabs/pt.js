@@ -256,8 +256,8 @@ const PtTab = (() => {
             <div class="col-trainer">${esc(contractTrainer)}</div>
             <div class="col-trainer">${esc(assignedTrainer)}</div>
             <div class="col-actions inquiry-actions"${errorTooltip}>
-              ${r.sync_status === 'synced' || r.sync_status === 'duplicate'
-                ? `<button class="btn-action btn-sync-done" data-id="${r.id}" title="이미 동기화됨">동기화 완료</button>`
+              ${(r.sync_status === 'synced' || r.sync_status === 'duplicate' || r.sync_status === 'disabled' || r.is_upgrade)
+                ? `<button class="btn-action btn-sync-done" data-id="${r.id}" title="이미 동기화됨 또는 업그레이드 행">동기화 완료</button>`
                 : `<button class="btn-action btn-retry" data-id="${r.id}">동기화</button>`}
               <button class="btn-action btn-edit" data-id="${r.id}">수정</button>
               <button class="btn-action btn-upgrade" data-id="${r.id}" title="회수 추가 / 단가 변경 / 트레이너 변경">업그레이드</button>
