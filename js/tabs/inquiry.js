@@ -489,26 +489,36 @@ const InquiryTab = (() => {
 
     const ctx = buildSmsContext(inq);
 
-    // 템플릿 로드 (send_once 포함)
+    // 템플릿 로드 (send_once + send_once_days 포함)
     const { data: templates } = await supabase
       .from('sms_templates')
-      .select('id, name, msg, msg_type, title, category, send_once')
+      .select('id, name, msg, msg_type, title, category, send_once, send_once_days')
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
 
     // 이 회원 대상 발송 이력 (최근 10건)
     const { data: priorLogs } = await supabase
       .from('sms_logs')
-      .select('id, template_id, sent_at, result_code, msg, sms_templates(name, send_once)')
+      .select('id, template_id, sent_at, result_code, msg, sms_templates(name, send_once, send_once_days)')
       .eq('related_table', 'inquiries')
       .eq('related_id', inq.id)
       .order('sent_at', { ascending: false })
       .limit(10);
 
-    // 성공 발송 + send_once 템플릿 → "이미 발송됨" 마커 Set
+    // v15.4: send_once_days 윈도 반영
+    //   · send_once=true + send_once_days=NULL → 평생 (기존 동작)
+    //   · send_once=true + send_once_days=N → 최근 N일 내만 차단
+    const now = Date.now();
     const successOnceSent = new Set(
       (priorLogs || [])
-        .filter(l => l.result_code > 0 && l.sms_templates?.send_once)
+        .filter(l => {
+          if (!(l.result_code > 0)) return false;
+          if (!l.sms_templates?.send_once) return false;
+          const days = l.sms_templates.send_once_days;
+          if (!days) return true;  // 평생
+          const sentMs = new Date(l.sent_at || l.created_at).getTime();
+          return (now - sentMs) <= days * 24 * 60 * 60 * 1000;
+        })
         .map(l => l.template_id)
     );
 
