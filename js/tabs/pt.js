@@ -931,7 +931,24 @@ const PtTab = (() => {
       return;
     }
 
-    // v7: VeraGym 자동 동기화 비활성 (두 앱 분리 운영). 재활성 시 pg_cron + 폼 sync 둘 다 켜야 함.
+    // 신규 PT 등록 시: PT관리앱(VeraGym) 자동 동기화
+    // (이전 v7 분리 운영 방침에서 v8 통합 운영으로 전환 — pt_registration_sync RPC 호출)
+    // 실패해도 등록 자체는 성공으로 처리 (sync_status='pending' 으로 남아 추후 재시도 가능)
+    if (!isEdit && newPtId) {
+      try {
+        const { data: syncRes, error: syncErr } = await supabase.rpc('pt_registration_sync', {
+          p_pt_reg_id: newPtId,
+        });
+        if (syncErr) {
+          console.warn('PT관리앱 자동 동기화 실패(저장은 완료):', syncErr.message);
+        } else if (syncRes && syncRes.duplicate) {
+          console.info('PT관리앱에 이미 동일 PT 존재 — 동기화 생략:', syncRes.note);
+        }
+      } catch (e) {
+        console.warn('pt_registration_sync 호출 예외:', e.message);
+      }
+    }
+
     Toast.success(`PT${submitLabel} 저장 완료`);
 
     // 신규 PT 등록 시 자동 SMS 예약 (PT 카테고리 + auto_send=true 매칭 템플릿)
