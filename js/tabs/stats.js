@@ -902,5 +902,11 @@ const StatsTab = (() => {
     };
   }
 
-  return { init };
+  // 외부에서 [기간별 비교] 서브탭으로 바로 진입 (예: 문의관리 탭의 [통계보기] 버튼)
+  function gotoCompare() {
+    activeSubTab = 'compare';
+    init();
+  }
+
+  return { init, gotoCompare };
 })();

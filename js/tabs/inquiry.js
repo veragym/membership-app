@@ -34,6 +34,7 @@ const InquiryTab = (() => {
     pane.innerHTML = `
       <div class="inquiry-toolbar">
         <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
+        <button class="btn btn-secondary btn-chip-sized" id="btn-goto-stats">통계보기</button>
         <div style="flex:1;"></div>
         <div class="inquiry-toolbar-actions">
           <span class="inquiry-filter-count" id="inquiry-filter-count" style="display:none;"></span>
@@ -67,6 +68,17 @@ const InquiryTab = (() => {
       if (typeof ExcelImport !== 'undefined') ExcelImport.openExport();
     });
     pane.querySelector('#btn-add-inquiry').addEventListener('click', () => openInquiryForm());
+
+    // [통계보기] → 통계 탭 전환 + 기간별 비교 서브탭 진입
+    pane.querySelector('#btn-goto-stats').addEventListener('click', () => {
+      const statsBtn = document.querySelector('.tab-btn[data-tab="stats"]');
+      if (statsBtn) statsBtn.click();
+      // App.switchTab 이 StatsTab.init() 한 번만 호출하므로 직접 compare 진입 메서드 호출
+      if (typeof StatsTab !== 'undefined' && StatsTab.gotoCompare) {
+        // 탭 전환 후 DOM 렌더가 끝나야 init 가 정상 동작 → next tick
+        setTimeout(() => StatsTab.gotoCompare(), 0);
+      }
+    });
   }
 
   function _updateClearFiltersButton(filteredCount, totalLoadedCount) {
