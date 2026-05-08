@@ -750,12 +750,6 @@ html, body {
 .btn-chip-sized.btn-primary {
   box-shadow: var(--shadow-xs);
 }
-/* v16: 토글 활성 상태 (미등록자 모드 ON) */
-.btn-chip-sized.active {
-  background: var(--color-accent);
-  color: #fff;
-  border-color: var(--color-accent);
-}
 /* v16: 툴바 줄바꿈/잘림 방지 — 항상 버튼 보이게 */
 .inquiry-toolbar .btn-chip-sized,
 .inquiry-toolbar .inq-date-input,

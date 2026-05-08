@@ -97,9 +97,8 @@ const InquiryTab = (() => {
     function syncUnregisteredBtn() {
       const btn = pane.querySelector('#btn-unregistered');
       if (!btn) return;
-      btn.classList.toggle('active', unregisteredMode);
-      // 텍스트는 고정 — 폭 변화 방지 (active 색상으로 ON 표시)
-      btn.textContent = '미등록자 보기';
+      // OFF: "미등록자 보기" / ON: "전체 보기" — 색상·테두리 변화 없이 텍스트로만 구분
+      btn.textContent = unregisteredMode ? '전체 보기' : '미등록자 보기';
     }
     pane.querySelector('#btn-unregistered').addEventListener('click', () => {
       unregisteredMode = !unregisteredMode;
