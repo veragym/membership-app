@@ -746,6 +746,12 @@ html, body {
   color: #fff;
   border-color: var(--color-accent);
 }
+/* v16: 툴바 줄바꿈/잘림 방지 — 항상 버튼 보이게 */
+.inquiry-toolbar .btn-chip-sized,
+.inquiry-toolbar .inq-date-input {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 
 /* v16: 문의 툴바 날짜 입력 — chip 사이즈 정합 */
 .inq-date-input {
