@@ -657,10 +657,20 @@ html, body {
   flex-wrap: wrap;
 }
 
+/* v16: left/right 명시적 그룹 — 좁은 화면에서 자연스러운 줄바꿈 */
+.inquiry-toolbar-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .inquiry-toolbar .search-box {
-  flex: 1;
-  min-width: 200px;
-  max-width: 360px;
+  flex: 1 1 200px;
+  min-width: 180px;
+  max-width: 320px;
   height: 40px;
   padding: 0 14px;
   border: 1px solid var(--color-border);
@@ -748,7 +758,9 @@ html, body {
 }
 /* v16: 툴바 줄바꿈/잘림 방지 — 항상 버튼 보이게 */
 .inquiry-toolbar .btn-chip-sized,
-.inquiry-toolbar .inq-date-input {
+.inquiry-toolbar .inq-date-input,
+.inquiry-toolbar-left .btn-chip-sized,
+.inquiry-toolbar-left .inq-date-input {
   flex-shrink: 0;
   white-space: nowrap;
 }

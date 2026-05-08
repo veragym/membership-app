@@ -42,12 +42,13 @@ const InquiryTab = (() => {
 
     pane.innerHTML = `
       <div class="inquiry-toolbar">
-        <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
-        <button class="btn btn-secondary btn-chip-sized" id="btn-goto-stats">통계보기</button>
-        <input type="date" class="inq-date-input" id="inq-date-from" value="${fromDefault}" title="시작 날짜">
-        <input type="date" class="inq-date-input" id="inq-date-to" value="${toDefault}" title="끝 날짜">
-        <button class="btn btn-secondary btn-chip-sized" id="btn-unregistered">미등록자 보기</button>
-        <div style="flex:1;"></div>
+        <div class="inquiry-toolbar-left">
+          <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
+          <button class="btn btn-secondary btn-chip-sized" id="btn-goto-stats">통계보기</button>
+          <input type="date" class="inq-date-input" id="inq-date-from" value="${fromDefault}" title="시작 날짜">
+          <input type="date" class="inq-date-input" id="inq-date-to" value="${toDefault}" title="끝 날짜">
+          <button class="btn btn-secondary btn-chip-sized" id="btn-unregistered">미등록자 보기</button>
+        </div>
         <div class="inquiry-toolbar-actions">
           <span class="inquiry-filter-count" id="inquiry-filter-count" style="display:none;"></span>
           <button class="btn btn-secondary btn-chip-sized" id="btn-clear-filters" style="display:none;">필터 초기화</button>
