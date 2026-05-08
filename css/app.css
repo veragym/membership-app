@@ -740,6 +740,29 @@ html, body {
 .btn-chip-sized.btn-primary {
   box-shadow: var(--shadow-xs);
 }
+/* v16: 토글 활성 상태 (미등록자 모드 ON) */
+.btn-chip-sized.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+/* v16: 문의 툴바 날짜 입력 — chip 사이즈 정합 */
+.inq-date-input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-1);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.inq-date-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
 
 /* 등록/미등록 상태 필터 칩 그룹 — v6.2: 툴바 요소 높이 통일 40px */
 .status-filter {

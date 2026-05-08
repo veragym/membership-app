@@ -15,6 +15,8 @@ const InquiryTab = (() => {
   let displayLimit = PAGE_SIZE;
   let totalCount = 0;
   let isLoading = false;
+  // v16: 미등록자 보기 — 시작/끝 날짜 사이 status='unregistered' 만 페이지네이션 없이 전체 표시
+  let unregisteredMode = false;
 
   // "2026-04-17" / "2026/4/7" → "26/4/17" (리스트 표시 전용 축약 포맷)
   function fmtDateShort(s) {
@@ -31,10 +33,20 @@ const InquiryTab = (() => {
 
   function renderToolbar() {
     const pane = document.getElementById('tab-inquiry');
+    // v16: 미등록자 보기 기본 날짜 — 30일 전 ~ 오늘
+    const today = new Date();
+    const monthAgo = new Date(today);
+    monthAgo.setDate(today.getDate() - 30);
+    const fromDefault = monthAgo.toISOString().slice(0, 10);
+    const toDefault = today.toISOString().slice(0, 10);
+
     pane.innerHTML = `
       <div class="inquiry-toolbar">
         <input type="text" class="search-box" placeholder="이름 또는 번호 검색...">
         <button class="btn btn-secondary btn-chip-sized" id="btn-goto-stats">통계보기</button>
+        <input type="date" class="inq-date-input" id="inq-date-from" value="${fromDefault}" title="시작 날짜">
+        <input type="date" class="inq-date-input" id="inq-date-to" value="${toDefault}" title="끝 날짜">
+        <button class="btn btn-secondary btn-chip-sized" id="btn-unregistered">미등록자 보기</button>
         <div style="flex:1;"></div>
         <div class="inquiry-toolbar-actions">
           <span class="inquiry-filter-count" id="inquiry-filter-count" style="display:none;"></span>
@@ -79,6 +91,26 @@ const InquiryTab = (() => {
         setTimeout(() => StatsTab.gotoCompare(), 0);
       }
     });
+
+    // v16: [미등록자 보기] 토글 — 기간 내 status='unregistered' 만 페이지네이션 없이 전체 표시
+    function syncUnregisteredBtn() {
+      const btn = pane.querySelector('#btn-unregistered');
+      if (!btn) return;
+      btn.classList.toggle('active', unregisteredMode);
+      btn.textContent = unregisteredMode ? '✓ 미등록자 모드' : '미등록자 보기';
+    }
+    pane.querySelector('#btn-unregistered').addEventListener('click', () => {
+      unregisteredMode = !unregisteredMode;
+      syncUnregisteredBtn();
+      loadInquiries();
+    });
+    // 미등록자 모드일 때 날짜 변경 시 자동 새로고침
+    ['#inq-date-from', '#inq-date-to'].forEach(sel => {
+      pane.querySelector(sel).addEventListener('change', () => {
+        if (unregisteredMode) loadInquiries();
+      });
+    });
+    syncUnregisteredBtn();
   }
 
   function _updateClearFiltersButton(filteredCount, totalLoadedCount) {
@@ -106,7 +138,11 @@ const InquiryTab = (() => {
     const hasSearch = searchQuery.length > 0;
     const hasColumnFilter = ColumnFilter.activeCount('inquiry') > 0;
     // v15: 검색 또는 컬럼 필터가 있으면 더 많이 로드 (필터 결과가 0건처럼 보이는 현상 방지)
-    const fetchLimit = (hasSearch || hasColumnFilter) ? 1000 : displayLimit;
+    // v16: 미등록자 모드 — 기간 내 전체 (5000건 상한)
+    let fetchLimit;
+    if (unregisteredMode) fetchLimit = 5000;
+    else if (hasSearch || hasColumnFilter) fetchLimit = 1000;
+    else fetchLimit = displayLimit;
 
     const selectStr = `
       *,
@@ -122,6 +158,14 @@ const InquiryTab = (() => {
       .select(selectStr, { count: 'exact' })
       .order('inquiry_date', { ascending: false })
       .order('created_at', { ascending: false });
+
+    if (unregisteredMode) {
+      query = query.eq('status', 'unregistered');
+      const fromDate = document.getElementById('inq-date-from')?.value;
+      const toDate = document.getElementById('inq-date-to')?.value;
+      if (fromDate) query = query.gte('inquiry_date', fromDate);
+      if (toDate) query = query.lte('inquiry_date', toDate);
+    }
 
     if (hasSearch) {
       const q = sanitizeSearch(searchQuery);
@@ -334,9 +378,10 @@ const InquiryTab = (() => {
     bodyEl.appendChild(frag);
 
     // v15: 더보기 — 검색/필터 없을 때만 노출 (필터 시엔 1000건 일괄 로드라 불필요)
+    // v16: 미등록자 모드는 페이지네이션 없이 전체 표시 → 더보기 숨김
     const hasFilterOrSearch = searchQuery.length > 0 || ColumnFilter.activeCount('inquiry') > 0;
     const fetchedRows = allInquiries.length;
-    if (!hasFilterOrSearch && fetchedRows < totalCount) {
+    if (!hasFilterOrSearch && !unregisteredMode && fetchedRows < totalCount) {
       const moreWrap = document.createElement('div');
       moreWrap.className = 'inquiry-more-wrap';
       moreWrap.style.cssText = 'text-align:center; padding:16px 0;';
