@@ -749,29 +749,43 @@ const PtTab = (() => {
           const nameInput = el.querySelector('input[name="selected_name"]');
           const phoneInput = el.querySelector('input[name="selected_phone"]');
 
-          // v11: 회원 검색 — members 마스터(veragym-app 통합 회원) 기준. inquiries에 없는 PT만 회원도 포함.
+          // v13: 회원 검색 — members(PT통합) + inquiries(문의관리) 양쪽 모두 조회
+          //  - inquiries 에만 있는 문의자(아직 PT 등록 안 한 회원)도 검색에 포함
+          //  - phone 기준 중복 제거 (members 우선)
           searchInput.addEventListener('input', debounce(async () => {
             const raw = searchInput.value.trim();
             if (raw.length < 1) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; return; }
             const q = sanitizeSearch(raw);  // v12: LIKE 와일드카드 + or() 예약문자 방어
             if (!q) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; return; }
 
-            const { data } = await supabase
-              .from('members')
-              .select('name, phone')
-              .not('phone', 'is', null)
-              .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
-              .order('name')
-              .limit(20);
+            const [memRes, inqRes] = await Promise.all([
+              supabase.from('members')
+                .select('name, phone')
+                .not('phone', 'is', null)
+                .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+                .order('name')
+                .limit(20),
+              supabase.from('inquiries')
+                .select('name, phone')
+                .not('phone', 'is', null)
+                .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+                .order('name')
+                .limit(20)
+            ]);
 
-            if (!data || data.length === 0) {
+            const memData = memRes.data || [];
+            const inqData = inqRes.data || [];
+            if (memData.length === 0 && inqData.length === 0) {
               resultsEl.innerHTML = '<div class="pt-search-item empty">검색 결과 없음. 문의관리에서 회원 등록 후 진행하세요.</div>';
               resultsEl.style.display = 'block';
               return;
             }
 
-            // 중복 phone 제거
-            const unique = [...new Map(data.map(d => [d.phone, d])).values()];
+            // members 우선 + inquiries 보완 (phone 중복 제거)
+            const map = new Map();
+            memData.forEach(d => map.set(d.phone, d));
+            inqData.forEach(d => { if (!map.has(d.phone)) map.set(d.phone, d); });
+            const unique = [...map.values()];
 
             // v12: XSS 방어 — DB name/phone 값 이스케이프 후 DOM 주입
             resultsEl.innerHTML = unique.map(d => {
