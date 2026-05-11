@@ -775,13 +775,20 @@ const InquiryTab = (() => {
               return;
             }
 
+            // ★ 가족 phone 공유 dummy 회원 (12자리 phone) 은 SMS 발송 차단
+            const recvDigits = String(inq.phone || '').replace(/\D/g, '');
+            if (recvDigits.length !== 11) {
+              Toast.warning('전화번호가 11자리가 아니어서 문자를 보낼 수 없습니다 (가족 phone 공유 회원으로 추정)');
+              return;
+            }
+
             // sms_scheduled 큐에 즉시 발송 대상으로 INSERT
             // (due_at = NOW() → 매장 PC 가 폴링하여 Aligo 로 발송)
             const { error: insErr } = await supabase.from('sms_scheduled').insert([{
               template_id: tpl?.id || null,
               related_table: 'inquiries',
               related_id: inq.id,
-              receiver: String(inq.phone || '').replace(/\D/g, ''),
+              receiver: recvDigits,
               receiver_name: inq.name || null,
               msg: finalMsg,
               msg_type: tpl?.msg_type && tpl.msg_type !== 'auto' ? tpl.msg_type : 'auto',
