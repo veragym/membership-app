@@ -2487,6 +2487,16 @@ html, body {
 .stats-delta.pos { color: var(--color-success-mid-alt); }
 .stats-delta.neg { color: var(--color-danger-strong); }
 
+/* v5: FC/PT 행 옆 차이 표시 (전월·전년 카드) */
+.stats-row-diff {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.stats-row-diff.pos { color: var(--color-success-mid-alt); }
+.stats-row-diff.neg { color: var(--color-danger-strong); }
+
 /* v3: 당월 매출 카드 — 금일/당월 병치 헤더 */
 .stats-today-grid {
   display: grid;

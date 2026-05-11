@@ -337,11 +337,22 @@ const StatsTab = (() => {
   function renderCard(title, rev, fcTarget, ptTarget, opts = {}) {
     const fc = rev.fc, pt = rev.pt, total = fc + pt;
     const fmt = n => n.toLocaleString() + '원';
+    const fmtSigned = n => (n >= 0 ? '+' : '') + n.toLocaleString() + '원';
 
     // v3: 당월 카드 전용 — 금일 매출 병치 헤더 + FC/PT 섹션 내 금일 병치
     let topTodayBlock = '';
     let fcRow = `<div class="stats-row"><span>FC 총 매출 (부가세 제외)</span><b>${fmt(fc)}</b></div>`;
     let ptRow = `<div class="stats-row"><span>PT 매출 (계약금액)</span><b>${fmt(pt)}</b></div>`;
+
+    // v5: 전월·전년 카드 — FC/PT 각각 차이 표시 (current - 이전기간)
+    if (opts.compareBase) {
+      const fcDiff = opts.compareBase.fc - fc;
+      const ptDiff = opts.compareBase.pt - pt;
+      const fcCls = fcDiff >= 0 ? 'pos' : 'neg';
+      const ptCls = ptDiff >= 0 ? 'pos' : 'neg';
+      fcRow = `<div class="stats-row"><span>FC 총 매출 (부가세 제외)</span><b>${fmt(fc)} <span class="stats-row-diff ${fcCls}">(${fmtSigned(fcDiff)})</span></b></div>`;
+      ptRow = `<div class="stats-row"><span>PT 매출 (계약금액)</span><b>${fmt(pt)} <span class="stats-row-diff ${ptCls}">(${fmtSigned(ptDiff)})</span></b></div>`;
+    }
     if (opts.current && opts.todayRev) {
       const t = opts.todayRev;
       const todayTotal = (t.fc || 0) + (t.pt || 0);
