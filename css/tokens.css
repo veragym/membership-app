@@ -40,6 +40,51 @@
   --color-info-bg: #DBEAFE;
   --color-info-dark: #1E40AF;
 
+  /* ── Semantic (soft borders / accents) ── */
+  --color-success-border: #A7F3D0;
+  --color-success-border-strong: #6EE7B7;
+  --color-success-bg-soft: #F0FDF4;
+  --color-success-bg-soft-border: #BBF7D0;
+  --color-success-text: #16A34A;
+  --color-success-mid: #047857;
+  --color-success-mid-alt: #059669;
+  --color-warning-border: #FDE68A;
+  --color-warning-border-strong: #FCD34D;
+  --color-warning-text-deep: #78350F;
+  --color-danger-border: #FECACA;
+  --color-danger-bg-soft: #FEF2F2;
+  --color-danger-strong: #DC2626;
+  --color-danger-mid: #B91C1C;
+  --color-info-text: #2563EB;
+  --color-info-text-soft: #1D4ED8;
+  --color-info-border: #93C5FD;
+  --color-info-bg-soft: #EFF6FF;
+  --color-info-bg-strong: #BFDBFE;
+
+  /* ── Tag / Badge (5색 시맨틱 — 정보·성공·주황·보라·위험) ── */
+  --color-tag-blue-bg: #EFF6FF;
+  --color-tag-blue-text: #2563EB;
+  --color-tag-green-bg: #F0FDF4;
+  --color-tag-green-text: #16A34A;
+  --color-tag-orange-bg: #FFEDD5;
+  --color-tag-orange-text: #9A3412;
+  --color-tag-orange-text-deep: #EA580C;
+  --color-tag-purple-bg: #EDE9FE;
+  --color-tag-purple-text: #5B21B6;
+  --color-tag-red-bg: #FEE2E2;
+  --color-tag-red-text: #B91C1C;
+
+  /* ── Misc neutral / accent ── */
+  --color-neutral-mid: #9CA3AF;
+  --color-checkbox-default: #555555;
+  --color-overlay: rgba(0,0,0,0.35);
+  --color-on-primary-soft: rgba(255,255,255,0.3);
+  --color-on-primary-90: rgba(255,255,255,0.9);
+  --color-primary-focus-ring: rgba(255,107,53,0.25);
+  --color-primary-row-soft: rgba(37,99,235,0.04);
+  --color-success-row-soft: rgba(16,185,129,0.08);
+  --color-strikethrough-mid: rgba(100,100,100,0.5);
+
   /* ── Radius (iOS) ── */
   --radius-xs: 6px;
   --radius-sm: 10px;
