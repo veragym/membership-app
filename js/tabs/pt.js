@@ -919,13 +919,29 @@ const PtTab = (() => {
     };
 
     // v8: 수정 모드 UPDATE / 신규 모드 INSERT 분기
+    // v16: 수정 모드는 pt_registration_edit RPC — 회원권 장부 + PT관리앱(수강권/결제/회원)
+    //      단일 트랜잭션 동시 갱신. 직접 UPDATE 시 두 앱이 어긋나던 문제 해결.
     let error;
     let newPtId = null;
     if (isEdit) {
-      ({ error } = await supabase
-        .from('pt_registrations')
-        .update(payload)
-        .eq('id', editRecord.id));
+      const { data: editRes, error: editErr } = await supabase.rpc('pt_registration_edit', {
+        p_pt_reg_id: editRecord.id,
+        p_pt_count: ptCount,
+        p_session_price: sessionPrice,
+        p_paid_cash: cash,
+        p_paid_card: card,
+        p_contract_trainer_id: contractTrainerId,
+        p_assigned_trainer_id: assignedTrainerId,
+        p_contract_date: payload.contract_date,
+      });
+      error = editErr;
+      if (!editErr && editRes && editRes.ok !== true) {
+        Toast.error('수정 실패: ' + (editRes.error || 'unknown'));
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitLabel;
+        return;
+      }
+      if (!editErr && editRes?.note) Toast.info(editRes.note);
     } else {
       payload.name = name;
       payload.phone = phone;
