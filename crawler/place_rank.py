@@ -11,6 +11,7 @@
 환경변수:
   SUPABASE_URL
   SUPABASE_SERVICE_ROLE_KEY
+  TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID  (선택 — 무증상 고장 텔레그램 경고용)
 
 동작:
   - 엔드포인트: https://search.naver.com/search.naver?query=<keyword>
@@ -22,6 +23,11 @@
   - '< 1/5 >' 페이지네이션 우측 화살표 클릭 → 최대 5페이지 순회
   - 카드 이름에 '베라짐' 포함 → is_found=true, branch 자동 태깅 (주소에 '미사'/'동탄')
   - 못 찾으면 is_found=false 1건만 기록, error 필드에 디버그 JSON 저장
+
+무증상 고장 감지 (run_all 종료 시):
+  - 전 키워드 is_found=false → DOM 개편/차단 의심
+  - 한 키워드의 수집 업체명 5개 이상이 전부 동일 → 라벨 오인 파서 고장 의심
+  - 감지 시 텔레그램 경고 발송 + exit 1 (GitHub Actions 실패 처리)
 """
 import os
 import sys
@@ -61,6 +67,10 @@ UA_POOL = [
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+# 무증상 고장 알림용 (veragym-harness auto/telegram_send.py와 동일한 env 규약)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 
 # ─────────────────────────────────────
@@ -107,6 +117,78 @@ async def sb_update(table: str, pk_col: str, pk_val, patch: dict) -> dict:
         r.raise_for_status()
         data = r.json()
         return data[0] if isinstance(data, list) and data else {}
+
+
+# ─────────────────────────────────────
+# 무증상 고장 감지 (2026-05-28 DOM 개편 2주 무증상 장애 재발 방지)
+# ─────────────────────────────────────
+def send_telegram_alert(text: str) -> bool:
+    """텔레그램 경고 발송. 토큰 미설정/발송 실패 시 False (호출부에서 exit code로 2차 방어)."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("[warn] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 미설정 -> 텔레그램 알림 생략")
+        return False
+    try:
+        r = httpx.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": text[:4000],
+                "disable_web_page_preview": True,
+            },
+            timeout=15,
+        )
+        if r.status_code != 200 or not r.json().get("ok"):
+            print(f"[warn] 텔레그램 발송 실패: {r.status_code} {r.text[:200]}")
+            return False
+        return True
+    except Exception as e:
+        print(f"[warn] 텔레그램 발송 예외: {e}")
+        return False
+
+
+def check_run_health(per_keyword: list[dict]) -> list[str]:
+    """실행 결과 전체를 보고 파서 고장 신호를 수집. 반환: 문제 설명 리스트 (비면 정상).
+
+    per_keyword 항목: {"keyword": str, "found": bool, "names": [수집 업체명...]}
+
+    감지 규칙:
+      1) 전 키워드 미발견 — active 키워드 전부 is_found=false (개별 미발견은 정상이지만
+         동시 전체 미발견은 DOM 개편/차단 신호)
+      2) 추출 품질 — 어떤 키워드든 수집 업체명 5개 이상이 전부 동일 문자열이면
+         라벨 텍스트('이미지수' 등)를 이름으로 오인한 파서 고장
+    """
+    problems = []
+    if not per_keyword:
+        return problems
+
+    # 1) 전 키워드 미발견
+    if not any(k["found"] for k in per_keyword):
+        kw_list = ", ".join(k["keyword"] for k in per_keyword)
+        problems.append(
+            f"전 키워드({len(per_keyword)}개) is_found=false: {kw_list}\n"
+            f"→ 네이버 DOM 개편 또는 차단 가능성. place_rank_history.error 디버그 JSON 확인 필요"
+        )
+
+    # 2) 수집 업체명 전부 동일 (키워드별)
+    for k in per_keyword:
+        names = [n for n in k["names"] if n]
+        if len(names) >= 5 and len(set(names)) == 1:
+            problems.append(
+                f"키워드 '{k['keyword']}': 수집 업체명 {len(names)}개가 전부 '{names[0]}' 동일\n"
+                f"→ 라벨/뱃지 텍스트를 업체명으로 오인하는 파서 고장"
+            )
+
+    return problems
+
+
+def _actions_run_url() -> str:
+    """GitHub Actions 실행 중이면 해당 run 링크 반환."""
+    server = os.environ.get("GITHUB_SERVER_URL", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if server and repo and run_id:
+        return f"{server}/{repo}/actions/runs/{run_id}"
+    return ""
 
 
 # ─────────────────────────────────────
@@ -520,12 +602,14 @@ async def debug_dump_place_box(page, keyword: str, label: str = ""):
 # ─────────────────────────────────────
 # 메인 크롤 로직
 # ─────────────────────────────────────
-async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = False) -> list[dict]:
+async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = False) -> tuple[list[dict], list[dict]]:
     """키워드 1개에 대해 search.naver.com 플레이스 박스 크롤링 → 베라짐 순위 기록.
 
     기록 규칙:
       - 베라짐 여러 카드(미사/동탄 각각) 시 각 branch별 1건씩
       - 못 찾으면 is_found=false 1건. error 필드에 디버그 JSON(누적 카드명/광고수 등).
+
+    반환: (results_rows, snapshot_rows) — snapshot_rows는 run_all의 무증상 고장 감지에 사용.
     """
     keyword = kw_row["keyword"]
     ua = random.choice(UA_POOL)
@@ -753,13 +837,14 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
             await insert_snapshots_bulk(snapshot_rows)
             print(f"[{keyword}] snapshot {len(snapshot_rows)}건 저장 완료")
 
-    return results_rows
+    return results_rows, snapshot_rows
 
 
 # ─────────────────────────────────────
 # 엔트리 포인트
 # ─────────────────────────────────────
-async def run_all(source: str = "auto"):
+async def run_all(source: str = "auto") -> bool:
+    """전체 active 키워드 크롤. 반환: True=정상, False=무증상 고장 감지됨 (Actions 실패 처리용)."""
     _require_env()
     kws = await sb_select(
         "place_rank_keywords",
@@ -767,9 +852,10 @@ async def run_all(source: str = "auto"):
     )
     if not kws:
         print("[info] active 키워드 없음 — 종료")
-        return
+        return True
     print(f"[info] {len(kws)}개 키워드 크롤 시작 (source={source})")
 
+    per_keyword: list[dict] = []  # 무증상 고장 감지용 실행 요약
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
@@ -777,11 +863,39 @@ async def run_all(source: str = "auto"):
         )
         for kw in kws:
             try:
-                await crawl_keyword(browser, kw, source)
+                results, snapshots = await crawl_keyword(browser, kw, source)
+                per_keyword.append({
+                    "keyword": kw["keyword"],
+                    "found": any(r.get("is_found") for r in results),
+                    "names": [s.get("business_name") or "" for s in snapshots],
+                })
             except Exception as e:
                 print(f"[error] kw={kw['keyword']} failed: {e}")
+                per_keyword.append({"keyword": kw["keyword"], "found": False, "names": []})
             await asyncio.sleep(random.uniform(4.0, 9.0))
         await browser.close()
+
+    # ── 무증상 고장 감지 ──
+    problems = check_run_health(per_keyword)
+    if not problems:
+        n_found = sum(1 for k in per_keyword if k["found"])
+        print(f"[health] 정상: {n_found}/{len(per_keyword)} 키워드에서 베라짐 발견")
+        return True
+
+    print("[health] !!! 무증상 고장 의심 !!!")
+    for pb in problems:
+        print(f"[health] {pb}")
+
+    now_kst = datetime.now(timezone.utc).astimezone().isoformat()[:16]
+    run_url = _actions_run_url()
+    msg = (
+        "🚨 [플레이스 순위 크롤러] 무증상 고장 의심\n\n"
+        + "\n\n".join(problems)
+        + f"\n\n실행: {now_kst} (source={source})"
+        + (f"\nActions: {run_url}" if run_url else "")
+    )
+    send_telegram_alert(msg)
+    return False
 
 
 async def run_one(keyword_id: str, source: str = "manual"):
@@ -844,7 +958,7 @@ async def run_test():
             headless=True,
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
-        rows = await crawl_keyword(browser, fake_kw, "manual", dry_run=True)
+        rows, _snapshots = await crawl_keyword(browser, fake_kw, "manual", dry_run=True)
         await browser.close()
     print("\n===== TEST RESULT =====")
     print(json.dumps(rows, ensure_ascii=False, indent=2))
@@ -861,7 +975,10 @@ def main():
             delay = random.randint(0, 300)
             print(f"[info] schedule jitter sleep {delay}s")
             time.sleep(delay)
-        asyncio.run(run_all("auto"))
+        healthy = asyncio.run(run_all("auto"))
+        if not healthy:
+            # 무증상 고장 감지 → GitHub Actions 실패 처리 (텔레그램과 이중 안전장치)
+            sys.exit(1)
     else:
         asyncio.run(run_one(arg, "manual"))
 
