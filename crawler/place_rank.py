@@ -322,7 +322,8 @@ PLACE_EXTRACT_JS = """
     // 1) img 태그
     const imgs = el.querySelectorAll('img');
     for (const img of imgs) {
-      const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      const src = img.getAttribute('src') || img.getAttribute('data-src')
+        || img.getAttribute('data-lazysrc') || img.getAttribute('data-original') || '';
       if (src && /pstatic\\.net|ssl\\.pstatic|myplace|place/.test(src)) {
         // data URI나 빈 src 제외
         if (src.startsWith('http')) return src;
@@ -367,6 +368,37 @@ PLACE_EXTRACT_JS = """
   }
 
   return report;
+}
+"""
+
+
+# ─────────────────────────────────────
+# 카드 lazy 이미지 로드용 스크롤
+# ─────────────────────────────────────
+# 뷰포트 밖 카드는 이미지가 lazy 로드라 src가 비어 있음 (1페이지 하단 카드 이미지 누락 원인).
+# n번째 카드를 뷰포트 중앙으로 스크롤시키고 전체 카드 수를 반환.
+SCROLL_CARD_JS = """
+(n) => {
+  const allSections = Array.from(document.querySelectorAll('section, div.api_subject_bx, div[data-module-name], div[class*="place"]'));
+  let box = null;
+  for (const s of allSections) {
+    const heading = s.querySelector('h2, h3, .api_title, .title_area, [class*="title"]');
+    if (heading && (heading.innerText || '').includes('플레이스')) { box = s; break; }
+    const mod = (s.getAttribute('data-module-name') || '').toLowerCase();
+    if (mod.includes('place')) { box = s; break; }
+  }
+  if (!box) {
+    const cands = Array.from(document.querySelectorAll('[class*="place"]'))
+      .filter(el => el.getBoundingClientRect().height > 200);
+    if (cands.length > 0) box = cands.sort((a,b) => b.getBoundingClientRect().height - a.getBoundingClientRect().height)[0];
+  }
+  if (!box) return 0;
+  const items = Array.from(box.querySelectorAll('li')).filter(li => {
+    const t = (li.innerText || '').trim();
+    return t.length >= 8 && li.getBoundingClientRect().height > 40;
+  });
+  if (n >= 0 && n < items.length) items[n].scrollIntoView({block: 'center'});
+  return items.length;
 }
 """
 
@@ -548,6 +580,16 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
                 pass
             await asyncio.sleep(random.uniform(0.8, 1.4))
 
+            # lazy 이미지 로드: 카드를 하나씩 뷰포트에 통과시킨다
+            try:
+                n_cards = await page.evaluate(SCROLL_CARD_JS, 0)
+                for i in range(1, min(n_cards, 12)):
+                    await page.evaluate(SCROLL_CARD_JS, i)
+                    await asyncio.sleep(random.uniform(0.2, 0.4))
+                await asyncio.sleep(0.5)
+            except Exception:
+                pass
+
             try:
                 report = await page.evaluate(PLACE_EXTRACT_JS)
             except Exception as e:
@@ -691,7 +733,8 @@ async def crawl_keyword(browser, kw_row: dict, source: str, dry_run: bool = Fals
 
     # Phase 1: 이미지 해시 계산 (동시 실행, 실패해도 전체 크롤에 영향 없음)
     if snapshot_rows:
-        print(f"[{keyword}] snapshot {len(snapshot_rows)}건 이미지 해시 계산 중...")
+        n_with_img = sum(1 for r in snapshot_rows if r.get("image_url"))
+        print(f"[{keyword}] snapshot {len(snapshot_rows)}건 (이미지 {n_with_img}/{len(snapshot_rows)}) 해시 계산 중...")
         async def _hash(row):
             row["image_hash"] = await fetch_image_hash(row.get("image_url"))
         try:
