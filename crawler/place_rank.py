@@ -249,6 +249,10 @@ PLACE_EXTRACT_JS = """
   }
 
   const isAdCard = (el) => {
+    // 2026-06 개편: 광고 카드는 '광고' 텍스트 대신 ader.naver.com 리다이렉트 링크 사용
+    if (el.querySelector('a[href*="ader.naver.com"]')) return true;
+    // 광고 안내 도움말 링크 (help.naver.com NSP)
+    if (el.querySelector('a[href*="help.naver.com/support/alias/NSP"]')) return true;
     // 광고 마커: em/span/i 중 텍스트가 "광고", "AD", "광고ⓘ" 또는 aria-label 에 '광고'
     const marks = el.querySelectorAll('em, span, i, ins, strong');
     for (const m of marks) {
@@ -266,9 +270,13 @@ PLACE_EXTRACT_JS = """
     return false;
   };
 
+  // 이름이 될 수 없는 뱃지/라벨 텍스트 (2026-06 개편 후 카드 상단에 등장)
+  const NAME_BLACKLIST = ['광고', 'AD', 'Ad', '이미지수', '네이버예약', '예약', '쿠폰', '톡톡', '네이버페이', '저장', '공유', '길찾기'];
+
   const getName = (el) => {
-    // 1순위: place_bluelink 안의 span/strong
+    // 1순위 (2026-06 개편): 업체명 링크 a.XCvzh 안의 span.nuCTT
     const prio = [
+      '.nuCTT', 'a.XCvzh span',
       '.place_bluelink', '.place_bluelink > span', '.place_bluelink strong',
       '.YwYLL', '.TYaxT', 'a.tzwk0 span',
       '[class*="place_name"]', '[class*="place_tit"]',
@@ -278,19 +286,27 @@ PLACE_EXTRACT_JS = """
       const x = el.querySelector(sel);
       if (x) {
         const t = (x.innerText || x.textContent || '').trim().split('\\n')[0].trim();
-        if (t && t.length >= 2 && t !== '광고') return t;
+        if (t && t.length >= 2 && !NAME_BLACKLIST.includes(t)) return t;
       }
     }
-    // 폴백: 첫 번째 의미 있는 텍스트 라인
+    // 폴백: 뱃지/숫자/거리 표기를 제외한 첫 번째 의미 있는 텍스트 라인
     const lines = (el.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
     for (const l of lines) {
-      if (l === '광고' || l === 'AD' || /^\\d+$/.test(l)) continue;
+      if (NAME_BLACKLIST.includes(l)) continue;
+      if (/^\\d+$/.test(l)) continue;
+      if (/^\\d+(\\.\\d+)?(km|m)$/.test(l)) continue;
       if (l.length >= 2 && l.length <= 60) return l;
     }
     return '';
   };
 
   const getAddress = (el) => {
+    // 1순위 (2026-06 개편): 주소 토글 안의 span.suKMR ('경기 하남시 망월동' 등)
+    const sk = el.querySelector('.suKMR');
+    if (sk) {
+      const t = (sk.innerText || sk.textContent || '').trim();
+      if (t && t.length >= 4) return t;
+    }
     const lines = (el.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
     for (const l of lines) {
       if (/(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|하남|화성|동탄|미사)/.test(l)) {
