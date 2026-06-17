@@ -13,7 +13,10 @@ const Auth = (() => {
   let currentTrainer = null; // trainers 행
 
   async function checkSession() {
-    const { data: { user } } = await supabase.auth.getUser();
+    // getSession(): localStorage 세션 복원 + 토큰 자동 갱신 (네트워크 의존 X)
+    // getUser()는 매번 서버 검증이라 토큰 만료·오프라인 시 null → 로그인 화면이 자꾸 재노출됨
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return null;
 
     const trainer = await verifyAppAccess(user.id);
@@ -65,7 +68,12 @@ const Auth = (() => {
   }
 
   async function logout() {
-    await supabase.auth.signOut();
+    try { await supabase.auth.signOut(); } catch (_) {}
+    // 잔존 세션 찌꺼기 정리 (전용 키 + 혹시 남아있는 구 기본키)
+    try {
+      localStorage.removeItem('vg_admin_session');
+      localStorage.removeItem('sb-lrzffwawpoidimlrbfxe-auth-token');
+    } catch (_) {}
     currentUser = null;
     currentTrainer = null;
   }
