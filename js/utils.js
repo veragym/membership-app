@@ -1,4 +1,30 @@
 /**
+ * 외부 라이브러리 지연 로드 — 필요할 때만 CDN 스크립트 1회 주입.
+ * (초기 로딩에서 xlsx/jszip/html2canvas ~1.2MB 제거 목적)
+ */
+const _LIB_URLS = {
+  xlsx:        'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  jszip:       'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+  html2canvas: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+};
+const _libLoaders = {};
+function ensureLib(...names) {
+  return Promise.all(names.map(n => {
+    if (!_libLoaders[n]) {
+      _libLoaders[n] = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = _LIB_URLS[n];
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => { delete _libLoaders[n]; reject(new Error(n + ' load failed')); };
+        document.head.appendChild(s);
+      });
+    }
+    return _libLoaders[n];
+  }));
+}
+
+/**
  * 전화번호 포맷: 숫자만 추출 → 010-XXXX-XXXX
  */
 function formatPhone(raw) {

@@ -735,10 +735,8 @@ const PromoTab = (() => {
   }
 
   async function shareScheduleImage() {
-    if (typeof html2canvas === 'undefined') {
-      Toast.error('이미지 라이브러리 로드 실패 — 새로고침 후 재시도해주세요.');
-      return;
-    }
+    try { await ensureLib('html2canvas'); }
+    catch (e) { Toast.error('이미지 라이브러리 로드 실패 — 다시 시도해주세요.'); return; }
     const btn = document.getElementById('btnShareSched');
     const orig = btn.textContent;
     btn.disabled = true; btn.textContent = '생성 중…';

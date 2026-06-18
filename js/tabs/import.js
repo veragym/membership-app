@@ -102,10 +102,8 @@ const ExcelImport = (() => {
   }
 
   async function handleFile(f) {
-    if (typeof XLSX === 'undefined') {
-      Toast.error('SheetJS 라이브러리 미로드 — 페이지를 새로고침 해주세요.');
-      return;
-    }
+    try { await ensureLib('xlsx'); }
+    catch (e) { Toast.error('엑셀 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도해주세요.'); return; }
 
     Toast.info('파일 파싱 중...');
 
@@ -872,6 +870,8 @@ ${errors.join('\n')}
       ...rows,
     ];
 
+    try { await ensureLib('xlsx', 'jszip'); }
+    catch (e) { Toast.error('엑셀 라이브러리 로드 실패 — 다시 시도해주세요.'); return; }
     const ws = XLSX.utils.aoa_to_sheet(sheetData, { cellDates: true });
 
     // ── v4: id 컬럼 (맨 끝) 숨김 + 헤더 주석 ──

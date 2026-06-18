@@ -89,34 +89,29 @@
   </div>
 
   <!-- ═══ Scripts ═══ -->
-  <!-- Supabase JS v2 CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <!-- SheetJS (엑셀 파싱) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- JSZip (xlsx 파일 구조 직접 조작 — id 열 hidden 속성 주입용) -->
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <!-- html2canvas (업무관리 시간표 PNG 공유용) -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <!-- Supabase JS v2 CDN (defer: 렌더 비차단) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- xlsx / jszip / html2canvas 는 import·export·이미지 캡처 시 ensureLib()(utils.js)로 지연 로드 → 초기 ~1.2MB 절감 -->
 
-  <!-- App (v=16: 설정 탭 신설(드롭다운 마스터 관리) + 등록폼·PT폼 드롭다운 치환 2026-04-17) -->
-  <script src="js/config.js?v=2"></script>
-  <script src="js/api.js?v=2"></script>
-  <script src="js/utils.js?v=6"></script>
-  <script src="js/components/toast.js?v=2"></script>
-  <script src="js/components/modal.js?v=2"></script>
-  <script src="js/components/dropdown.js?v=3"></script>
-  <script src="js/components/column-filter.js?v=2"></script>
-  <script src="js/auth.js?v=2"></script>
-  <script src="js/tabs/inquiry.js?v=45"></script>
-  <script src="js/tabs/stats.js?v=19"></script>
-  <script src="js/tabs/pt.js?v=41"></script>
-  <script src="js/tabs/spt.js?v=9"></script>
-  <script src="js/tabs/promo-place.js?v=3"></script>
-  <script src="js/tabs/promo-competitors.js?v=1"></script>
-  <script src="js/tabs/promo-calendar.js?v=12"></script>
-  <script src="js/tabs/promo.js?v=21"></script>
-  <script src="js/tabs/import.js?v=22"></script>
-  <script src="js/tabs/settings.js?v=13"></script>
-  <script src="js/app.js?v=5"></script>
+  <!-- App (defer: 다운로드 병렬화 + 순서 유지, 렌더 비차단) -->
+  <script defer src="js/config.js?v=2"></script>
+  <script defer src="js/api.js?v=2"></script>
+  <script defer src="js/utils.js?v=7"></script>
+  <script defer src="js/components/toast.js?v=2"></script>
+  <script defer src="js/components/modal.js?v=2"></script>
+  <script defer src="js/components/dropdown.js?v=3"></script>
+  <script defer src="js/components/column-filter.js?v=2"></script>
+  <script defer src="js/auth.js?v=2"></script>
+  <script defer src="js/tabs/inquiry.js?v=45"></script>
+  <script defer src="js/tabs/stats.js?v=19"></script>
+  <script defer src="js/tabs/pt.js?v=41"></script>
+  <script defer src="js/tabs/spt.js?v=10"></script>
+  <script defer src="js/tabs/promo-place.js?v=3"></script>
+  <script defer src="js/tabs/promo-competitors.js?v=1"></script>
+  <script defer src="js/tabs/promo-calendar.js?v=12"></script>
+  <script defer src="js/tabs/promo.js?v=22"></script>
+  <script defer src="js/tabs/import.js?v=23"></script>
+  <script defer src="js/tabs/settings.js?v=13"></script>
+  <script defer src="js/app.js?v=5"></script>
 </body>
 </html>
