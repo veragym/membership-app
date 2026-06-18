@@ -829,19 +829,27 @@ const PtTab = (() => {
           }
         }
 
-        // v7: veragym-app 규칙 — 계약금액 = 횟수 × 세션단가, 총결제액 = 계약금액 × 1.1 (VAT 10%)
+        // v7: veragym-app 규칙 — 계약금액 = 횟수 × 세션단가, 기준 총액 = 계약금액 × 1.1 (VAT 10%)
         let currentTotal = 0;
+        // 총결제액 표시 = 실제 결제액(현금+카드). 입력 전이면 기준 총액으로 폴백.
+        // (업그레이드 등 세션단가 정수 절삭 시 횟수×단가×1.1 이 실결제액과 어긋나던 문제 해결)
+        function recalcTotalDisplay() {
+          const cash = parseInt(cashInput.value) || 0;
+          const card = parseInt(cardInput.value) || 0;
+          const actual = cash + card;
+          totalPaymentEl.value = (actual > 0 ? actual : currentTotal).toLocaleString() + '원';
+        }
         function updateCalc() {
           const count = parseInt(ptCountInput.value) || 0;
           const price = parseInt(sessionPriceInput.value) || 0;
           const contract = count * price;
           currentTotal = Math.round(contract * 1.1);
           contractAmountEl.value = contract.toLocaleString() + '원';
-          totalPaymentEl.value = currentTotal.toLocaleString() + '원';
-          // 현금/계좌, 카드 placeholder 에 총결제액 표시 (둘 다 비어있을 때 기준)
+          // 현금/계좌, 카드 placeholder 에 기준 총액 표시 (둘 다 비어있을 때 분할 기준)
           const placeholderText = currentTotal > 0 ? currentTotal.toLocaleString() : '0';
           cashInput.placeholder = placeholderText;
           cardInput.placeholder = placeholderText;
+          recalcTotalDisplay();
         }
         ptCountInput.addEventListener('input', updateCalc);
         sessionPriceInput.addEventListener('input', updateCalc);
@@ -850,20 +858,26 @@ const PtTab = (() => {
         // v7: 한쪽 입력하면 다른쪽 자동 = 총결제액 - 입력값 (무한 루프 방지용 guard)
         let autoFilling = false;
         cashInput.addEventListener('input', () => {
-          if (autoFilling) return;
-          const cash = parseInt(cashInput.value);
-          if (isNaN(cash) || currentTotal <= 0) return;
-          autoFilling = true;
-          cardInput.value = Math.max(0, currentTotal - cash);
-          autoFilling = false;
+          if (!autoFilling) {
+            const cash = parseInt(cashInput.value);
+            if (!isNaN(cash) && currentTotal > 0) {
+              autoFilling = true;
+              cardInput.value = Math.max(0, currentTotal - cash);
+              autoFilling = false;
+            }
+          }
+          recalcTotalDisplay();
         });
         cardInput.addEventListener('input', () => {
-          if (autoFilling) return;
-          const card = parseInt(cardInput.value);
-          if (isNaN(card) || currentTotal <= 0) return;
-          autoFilling = true;
-          cashInput.value = Math.max(0, currentTotal - card);
-          autoFilling = false;
+          if (!autoFilling) {
+            const card = parseInt(cardInput.value);
+            if (!isNaN(card) && currentTotal > 0) {
+              autoFilling = true;
+              cashInput.value = Math.max(0, currentTotal - card);
+              autoFilling = false;
+            }
+          }
+          recalcTotalDisplay();
         });
 
         // 폼 제출
