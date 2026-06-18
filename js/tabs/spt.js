@@ -32,25 +32,29 @@ const SptTab = (() => {
   let filter = { search: '' };
 
   // ─────────────── 초기화 ───────────────
-  let _realtimeChannel = null;
+  let _focusSyncBound = false;
 
   async function init() {
     await loadTrainers();
     renderToolbar();
     await loadSummaries();
-    subscribeRealtime();
+    setupFocusSync();
   }
 
   async function reload() {
     await loadSummaries();
   }
 
-  // Supabase Realtime 구독 — 트레이너 앱이 spt_sessions/comments/members 변경 시 즉시 반영
-  function subscribeRealtime() {
-    if (_realtimeChannel) return;
-    // Realtime 재로드: loadSummaries 후 펼쳐진 코멘트 영역도 다시 채운다.
-    // (그렇지 않으면 renderList() 가 .spt-comments-full 을 스피너 초기 상태로 되돌려서 stuck)
-    const debouncedReload = debounce(async () => {
+  // 상시 Realtime 제거 → "변경 시 + 화면 복귀 시"에만 동기화 (Disk IO 절감)
+  //  - 본인 변경: 각 동작이 refreshAfterChange()로 즉시 반영
+  //  - 다른 기기 변경: SPT 화면으로 돌아올 때(탭 가시성/창 포커스) 다시 불러옴
+  // 동시 실시간이 필요 없는 운영 특성에 맞춘 방식. (펼쳐둔 코멘트 영역도 복원)
+  function setupFocusSync() {
+    if (_focusSyncBound) return;
+    _focusSyncBound = true;
+    const resync = debounce(async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!document.getElementById('spt-list')) return;   // SPT 화면일 때만
       await loadSummaries();
       for (const mid of expandedComments) {
         const card = document.querySelector(`.spt-card[data-member-id="${CSS.escape(mid)}"]`);
@@ -61,11 +65,8 @@ const SptTab = (() => {
         await loadAndRenderComments(el, mid);
       }
     }, 400);
-    _realtimeChannel = supabase.channel('spt-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_sessions' }, debouncedReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_member_comments' }, debouncedReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'spt_members' }, debouncedReload)
-      .subscribe();
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('focus', resync);
   }
 
   async function loadTrainers() {
