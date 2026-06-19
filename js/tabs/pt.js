@@ -842,7 +842,8 @@ const PtTab = (() => {
         function updateCalc() {
           const count = parseInt(ptCountInput.value) || 0;
           const price = parseInt(sessionPriceInput.value) || 0;
-          const contract = count * price;
+          // 계약금액 = 단가×횟수를 100원 단위 반올림 (세션단가 절삭 오차 보정, DB generated 컬럼과 동일 규칙)
+          const contract = Math.round((count * price) / 100) * 100;
           currentTotal = Math.round(contract * 1.1);
           contractAmountEl.value = contract.toLocaleString() + '원';
           // 현금/계좌, 카드 placeholder 에 기준 총액 표시 (둘 다 비어있을 때 분할 기준)
