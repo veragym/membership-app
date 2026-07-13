@@ -2274,7 +2274,14 @@ html, body {
 /* 당월 주별 매출 — trend-grid 전체 폭 */
 .stats-weekly-card { grid-column: 1 / -1; overflow-x: auto; }
 .stats-weekly-card h4 small { color: var(--color-text-muted); font-weight: 400; }
-.stats-weekly-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.stats-weekly-table {
+  width: 100%; max-width: 920px; table-layout: fixed;
+  border-collapse: collapse; font-size: 13px; margin-top: 4px;
+}
+/* 균등 컬럼 폭: 주차 12% · 기간 22% · 회원권/PT/매출합계 각 22% */
+.stats-weekly-table th:nth-child(1), .stats-weekly-table td:nth-child(1) { width: 12%; }
+.stats-weekly-table th:nth-child(2), .stats-weekly-table td:nth-child(2) { width: 22%; }
+.stats-weekly-table th:nth-child(n+3), .stats-weekly-table td:nth-child(n+3) { width: 22%; }
 .stats-weekly-table th {
   text-align: right; font-weight: 500; color: var(--color-text-secondary);
   padding: 6px 8px; border-bottom: 1px solid var(--color-border);
