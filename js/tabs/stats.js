@@ -126,6 +126,9 @@ const StatsTab = (() => {
             <div id="staffBodyPt" class="stats-staff-body"></div>
           </div>
         </div>
+        <div id="weeklyBreakdown" class="stats-weekly-card stats-card-v2">
+          <div class="loading-center"><div class="spinner"></div></div>
+        </div>
       </div>
     `;
 
@@ -151,6 +154,9 @@ const StatsTab = (() => {
     bindPeriodControls(container);
     loadFcData(container);
     loadPtData(container);
+
+    // 당월 주별 매출 (하단 전체 폭)
+    loadWeeklyBreakdown(container, y, m, today);
   }
 
   // ───────── 우측 패널: 기간 컨트롤 헬퍼 ─────────
@@ -463,6 +469,106 @@ const StatsTab = (() => {
     return { fc, pt };
   }
 
+  // ───────── 당월 주별 매출 (v8 주 규칙, revenue_targets 목표와 정렬) ─────────
+  async function loadWeeklyBreakdown(container, year, month, today) {
+    const el = container.querySelector('#weeklyBreakdown');
+    if (!el) return;
+    try {
+      const starts  = monthWeekStartDates(year, month); // Date[]
+      const lastDay = new Date(year, month, 0);
+      // 각 주 [시작, 끝] 구간 (끝 = 다음 주 시작 -1일, 마지막 주는 월말)
+      const ranges = starts.map((s, i) => {
+        const next = starts[i + 1];
+        const end = next
+          ? new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1)
+          : new Date(lastDay);
+        return { no: i + 1, startISO: isoDate(s), endISO: isoDate(end) };
+      });
+      const weekKeys = ranges.map(r => r.startISO);
+
+      // 목표: 당월 모든 주 한 번에 조회
+      const { data: tData, error: tErr } = await supabase.from('revenue_targets')
+        .select('target_type, target_week, target_amount')
+        .in('target_week', weekKeys);
+      if (tErr) throw tErr;
+      const targetMap = {};
+      (tData || []).forEach(r => { targetMap[`${r.target_type}_${r.target_week}`] = r.target_amount || 0; });
+
+      // 매출: 당월 1회 조회 후 주별 버킷 (fetchRevenue 와 동일 계산: FC ÷1.1, 제외상품 필터)
+      const monthStart  = isoDate(new Date(year, month - 1, 1));
+      const monthEndISO = isoDate(lastDay);
+      const [{ data: fcData, error: fcErr }, { data: ptData, error: ptErr }] = await Promise.all([
+        supabase.from('registrations').select('product, total_payment, registered_date')
+          .gte('registered_date', monthStart).lte('registered_date', monthEndISO),
+        supabase.from('pt_registrations').select('contract_amount, contract_date')
+          .gte('contract_date', monthStart).lte('contract_date', monthEndISO),
+      ]);
+      if (fcErr) throw fcErr;
+      if (ptErr) throw ptErr;
+
+      const bucketOf = (dateStr) => { // YYYY-MM-DD 문자열 비교로 주 index
+        let idx = 0;
+        for (let i = 0; i < weekKeys.length; i++) { if (dateStr >= weekKeys[i]) idx = i; else break; }
+        return idx;
+      };
+      const fcSum = new Array(ranges.length).fill(0);
+      const ptSum = new Array(ranges.length).fill(0);
+      (fcData || []).forEach(r => {
+        if (!r.registered_date || excludedProducts.has(r.product)) return;
+        fcSum[bucketOf(r.registered_date)] += (r.total_payment || 0);
+      });
+      (ptData || []).forEach(r => {
+        if (!r.contract_date) return;
+        ptSum[bucketOf(r.contract_date)] += (r.contract_amount || 0);
+      });
+
+      const curWeekNo = computeWeekInfo(today).weekNumber;
+      const fmt = n => n.toLocaleString() + '원';
+      const mdRange = (a, b) => `${a.slice(5).replace('-', '/')}~${b.slice(5).replace('-', '/')}`;
+
+      const rows = ranges.map((r, i) => {
+        const fc = Math.round(fcSum[i] / 1.1);
+        const total = fc + ptSum[i];
+        const target = (targetMap[`FC_${r.startISO}`] || 0) + (targetMap[`PT_${r.startISO}`] || 0);
+        const pct = target > 0 ? Math.round(total / target * 100) : null;
+        const pctCls = pct == null ? '' : (pct >= 100 ? 'pos' : 'neg');
+        const isCur = r.no === curWeekNo;
+        return `
+          <tr class="${isCur ? 'stats-weekly-current' : ''}">
+            <td class="stats-weekly-wk">${r.no}주차${isCur ? ' <span class="stats-weekly-badge">이번 주</span>' : ''}</td>
+            <td class="stats-weekly-range">${mdRange(r.startISO, r.endISO)}</td>
+            <td class="stats-weekly-amt"><b>${fmt(total)}</b></td>
+            <td class="stats-weekly-amt">${target > 0 ? fmt(target) : '—'}</td>
+            <td class="stats-weekly-amt"><b class="${pctCls}">${pct == null ? '—' : pct + '%'}</b></td>
+          </tr>`;
+      }).join('');
+
+      const monTotal  = Math.round(fcSum.reduce((a, b) => a + b, 0) / 1.1) + ptSum.reduce((a, b) => a + b, 0);
+      const monTarget = weekKeys.reduce((s, w) => s + (targetMap[`FC_${w}`] || 0) + (targetMap[`PT_${w}`] || 0), 0);
+      const monPct    = monTarget > 0 ? Math.round(monTotal / monTarget * 100) : null;
+      const monPctCls = monPct == null ? '' : (monPct >= 100 ? 'pos' : 'neg');
+
+      el.innerHTML = `
+        <h4>당월 주별 매출 <small>(${month}월 · FC+PT)</small></h4>
+        <table class="stats-weekly-table">
+          <thead><tr><th>주차</th><th>기간</th><th>매출</th><th>목표</th><th>달성</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">당월 합계</td>
+              <td class="stats-weekly-amt"><b>${fmt(monTotal)}</b></td>
+              <td class="stats-weekly-amt">${monTarget > 0 ? fmt(monTarget) : '—'}</td>
+              <td class="stats-weekly-amt"><b class="${monPctCls}">${monPct == null ? '—' : monPct + '%'}</b></td>
+            </tr>
+          </tfoot>
+        </table>
+      `;
+    } catch (e) {
+      console.error('loadWeeklyBreakdown failed:', e);
+      el.innerHTML = `<div class="stats-weekly-error">주별 매출을 불러오지 못했습니다.</div>`;
+    }
+  }
+
   async function loadProducts() {
     // 우선 설정(dropdown_options.회원권상품)에서 상품 목록을 가져온다.
     // 실제 매출에 사용된 상품도 합쳐서, 설정에서 삭제된 과거 상품도 필터 칩에 남게 한다.
@@ -493,21 +599,8 @@ const StatsTab = (() => {
 
   // ───────── 월별 목표 입력 모달 (해당 월에 걸치는 모든 주) ─────────
   async function openMonthlyTargetModal(year, month) {
-    // v8 규칙: 1주는 월 1일부터(1일이 무슨 요일이든), 2주부터 월요일 시작, 월 경계 넘지 않음
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay  = new Date(year, month, 0);
-    const weeks = [];
-    // 1주차: 월 1일
-    weeks.push(isoDate(firstDay));
-    // 1일 다음 월요일 계산
-    const dow = firstDay.getDay();  // 0=일, 1=월, ..., 6=토
-    const daysToMon = dow === 0 ? 1 : (8 - dow);
-    const nextMon = new Date(firstDay);
-    nextMon.setDate(nextMon.getDate() + daysToMon);
-    // 2주차부터 월요일 7일씩 말일까지
-    for (let d = new Date(nextMon); d <= lastDay; d.setDate(d.getDate() + 7)) {
-      weeks.push(isoDate(new Date(d)));
-    }
+    // v8 규칙 (monthWeekStartDates 공용): 1주=1일, 2주부터 월요일, 월 경계 안 넘음
+    const weeks = monthWeekStartDates(year, month).map(isoDate);
 
     // 기존 목표 로드
     const { data } = await supabase.from('revenue_targets')
@@ -877,14 +970,12 @@ const StatsTab = (() => {
   //   - 1주차: 월 1일 ~ 다음 월요일 직전 (1일이 무슨 요일이든)
   //   - 2주차 이후: 월요일~일요일 (단, 월 경계를 넘지 않고 말일에서 잘림)
   // 반환: { weekNumber, weekStart, weekEnd, weekStartISO }
-  function computeWeekInfo(date) {
-    const y = date.getFullYear(), m = date.getMonth() + 1;
-    const firstDay = new Date(y, m - 1, 1);
-    const lastDay  = new Date(y, m, 0);
-    const weeks = [];
-    // 1주차 시작 = 1일
-    weeks.push(new Date(firstDay));
-    // 1일 다음 월요일 계산
+  // v8 주 시작일 계산 (단일 소스) — openMonthlyTargetModal · computeWeekInfo · 당월 주별 매출 공용
+  //   1주차 = 월 1일, 2주차부터 월요일 시작, 월 경계 안 넘음
+  function monthWeekStartDates(year, month) {
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay  = new Date(year, month, 0);
+    const weeks = [new Date(firstDay)];
     const dow = firstDay.getDay();
     const daysToMon = dow === 0 ? 1 : (8 - dow);
     const nextMon = new Date(firstDay);
@@ -892,6 +983,13 @@ const StatsTab = (() => {
     for (let d = new Date(nextMon); d <= lastDay; d.setDate(d.getDate() + 7)) {
       weeks.push(new Date(d));
     }
+    return weeks;
+  }
+
+  function computeWeekInfo(date) {
+    const y = date.getFullYear(), m = date.getMonth() + 1;
+    const lastDay  = new Date(y, m, 0);
+    const weeks = monthWeekStartDates(y, m);
     // date 가 속한 주 찾기: 각 주의 시작일 이상인 것 중 마지막
     let idx = 0;
     for (let i = 0; i < weeks.length; i++) {

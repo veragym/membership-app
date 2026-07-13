@@ -2270,6 +2270,34 @@ html, body {
   gap: 12px;
   min-height: calc(100vh - 260px);
 }
+
+/* 당월 주별 매출 — trend-grid 전체 폭 */
+.stats-weekly-card { grid-column: 1 / -1; overflow-x: auto; }
+.stats-weekly-card h4 small { color: var(--color-text-muted); font-weight: 400; }
+.stats-weekly-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.stats-weekly-table th {
+  text-align: right; font-weight: 500; color: var(--color-text-secondary);
+  padding: 6px 8px; border-bottom: 1px solid var(--color-border);
+}
+.stats-weekly-table th:first-child,
+.stats-weekly-table th:nth-child(2) { text-align: left; }
+.stats-weekly-table td { padding: 7px 8px; border-bottom: 1px solid var(--color-divider); }
+.stats-weekly-wk { font-weight: 600; white-space: nowrap; }
+.stats-weekly-range { color: var(--color-text-secondary); white-space: nowrap; }
+.stats-weekly-amt { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats-weekly-amt b.pos { color: var(--color-info-text); }
+.stats-weekly-amt b.neg { color: var(--color-danger-strong); }
+.stats-weekly-current { background: rgba(255, 140, 0, .06); }
+.stats-weekly-badge {
+  font-size: 10px; color: var(--color-primary, #ff8c00); font-weight: 600;
+  border: 1px solid currentColor; border-radius: 4px; padding: 0 4px;
+  margin-left: 4px; vertical-align: middle;
+}
+.stats-weekly-table tfoot td {
+  border-top: 1px solid var(--color-border); border-bottom: none;
+  font-weight: 700; padding-top: 8px;
+}
+.stats-weekly-error { color: var(--color-text-muted); font-size: 13px; padding: 8px 0; }
 .stats-quad-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
