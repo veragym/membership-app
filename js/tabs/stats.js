@@ -486,14 +486,6 @@ const StatsTab = (() => {
       });
       const weekKeys = ranges.map(r => r.startISO);
 
-      // 목표: 당월 모든 주 한 번에 조회
-      const { data: tData, error: tErr } = await supabase.from('revenue_targets')
-        .select('target_type, target_week, target_amount')
-        .in('target_week', weekKeys);
-      if (tErr) throw tErr;
-      const targetMap = {};
-      (tData || []).forEach(r => { targetMap[`${r.target_type}_${r.target_week}`] = r.target_amount || 0; });
-
       // 매출: 당월 1회 조회 후 주별 버킷 (fetchRevenue 와 동일 계산: FC ÷1.1, 제외상품 필터)
       const monthStart  = isoDate(new Date(year, month - 1, 1));
       const monthEndISO = isoDate(lastDay);
@@ -527,38 +519,35 @@ const StatsTab = (() => {
       const mdRange = (a, b) => `${a.slice(5).replace('-', '/')}~${b.slice(5).replace('-', '/')}`;
 
       const rows = ranges.map((r, i) => {
-        const fc = Math.round(fcSum[i] / 1.1);
-        const total = fc + ptSum[i];
-        const target = (targetMap[`FC_${r.startISO}`] || 0) + (targetMap[`PT_${r.startISO}`] || 0);
-        const pct = target > 0 ? Math.round(total / target * 100) : null;
-        const pctCls = pct == null ? '' : (pct >= 100 ? 'pos' : 'neg');
+        const fc = Math.round(fcSum[i] / 1.1); // 회원권(FC, 부가세 제외)
+        const pt = ptSum[i];
+        const total = fc + pt;
         const isCur = r.no === curWeekNo;
         return `
           <tr class="${isCur ? 'stats-weekly-current' : ''}">
             <td class="stats-weekly-wk">${r.no}주차${isCur ? ' <span class="stats-weekly-badge">이번 주</span>' : ''}</td>
             <td class="stats-weekly-range">${mdRange(r.startISO, r.endISO)}</td>
+            <td class="stats-weekly-amt">${fmt(fc)}</td>
+            <td class="stats-weekly-amt">${fmt(pt)}</td>
             <td class="stats-weekly-amt"><b>${fmt(total)}</b></td>
-            <td class="stats-weekly-amt">${target > 0 ? fmt(target) : '—'}</td>
-            <td class="stats-weekly-amt"><b class="${pctCls}">${pct == null ? '—' : pct + '%'}</b></td>
           </tr>`;
       }).join('');
 
-      const monTotal  = Math.round(fcSum.reduce((a, b) => a + b, 0) / 1.1) + ptSum.reduce((a, b) => a + b, 0);
-      const monTarget = weekKeys.reduce((s, w) => s + (targetMap[`FC_${w}`] || 0) + (targetMap[`PT_${w}`] || 0), 0);
-      const monPct    = monTarget > 0 ? Math.round(monTotal / monTarget * 100) : null;
-      const monPctCls = monPct == null ? '' : (monPct >= 100 ? 'pos' : 'neg');
+      const monFc    = Math.round(fcSum.reduce((a, b) => a + b, 0) / 1.1);
+      const monPt    = ptSum.reduce((a, b) => a + b, 0);
+      const monTotal = monFc + monPt;
 
       el.innerHTML = `
-        <h4>당월 주별 매출 <small>(${month}월 · FC+PT)</small></h4>
+        <h4>당월 주별 매출 <small>(${month}월)</small></h4>
         <table class="stats-weekly-table">
-          <thead><tr><th>주차</th><th>기간</th><th>매출</th><th>목표</th><th>달성</th></tr></thead>
+          <thead><tr><th>주차</th><th>기간</th><th>회원권</th><th>PT</th><th>매출합계</th></tr></thead>
           <tbody>${rows}</tbody>
           <tfoot>
             <tr>
               <td colspan="2">당월 합계</td>
+              <td class="stats-weekly-amt">${fmt(monFc)}</td>
+              <td class="stats-weekly-amt">${fmt(monPt)}</td>
               <td class="stats-weekly-amt"><b>${fmt(monTotal)}</b></td>
-              <td class="stats-weekly-amt">${monTarget > 0 ? fmt(monTarget) : '—'}</td>
-              <td class="stats-weekly-amt"><b class="${monPctCls}">${monPct == null ? '—' : monPct + '%'}</b></td>
             </tr>
           </tfoot>
         </table>
