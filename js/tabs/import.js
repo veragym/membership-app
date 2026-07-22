@@ -901,7 +901,7 @@ ${errors.join('\n')}
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetType);
 
-    const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const yyyymmdd = todayISO().replace(/-/g, '');
     const filename = `${sheetType}_내보내기_${yyyymmdd}.xlsx`;
 
     // v4: SheetJS CE 의 !cols.hidden drop 이슈 회피 → XLSX.write 후 JSZip 으로 sheet1.xml 직접 수정
@@ -1035,7 +1035,7 @@ ${errors.join('\n')}
   // ═════════════════════════════════════════════════════════
   function toStr(v) {
     if (v == null) return '';
-    if (v instanceof Date) return isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10);
+    if (v instanceof Date) return isNaN(v.getTime()) ? '' : todayISO(v);
     return String(v).trim();
   }
 

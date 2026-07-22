@@ -37,8 +37,8 @@ const InquiryTab = (() => {
     const today = new Date();
     const monthAgo = new Date(today);
     monthAgo.setDate(today.getDate() - 30);
-    const fromDefault = monthAgo.toISOString().slice(0, 10);
-    const toDefault = today.toISOString().slice(0, 10);
+    const fromDefault = todayISO(monthAgo);
+    const toDefault = todayISO(today);
 
     pane.innerHTML = `
       <div class="inquiry-toolbar">
@@ -899,7 +899,7 @@ const InquiryTab = (() => {
             </div>
             <div class="form-group">
               <label>문의일자</label>
-              <input type="date" name="inquiry_date" value="${existing?.inquiry_date || new Date().toISOString().slice(0, 10)}">
+              <input type="date" name="inquiry_date" value="${existing?.inquiry_date || todayISO()}">
             </div>
             <div class="form-group">
               <label>구분</label>
@@ -970,7 +970,7 @@ const InquiryTab = (() => {
               </div>
               <div class="form-group">
                 <label>등록일자</label>
-                <input type="date" name="registered_date" value="${new Date().toISOString().slice(0, 10)}">
+                <input type="date" name="registered_date" value="${todayISO()}">
               </div>
               <div class="form-group">
                 <label>계약직원</label>
@@ -1190,7 +1190,7 @@ const InquiryTab = (() => {
 
       const regPayload = {
         inquiry_id: newInquiryId,
-        registered_date: fd.get('registered_date') || new Date().toISOString().slice(0, 10),
+        registered_date: fd.get('registered_date') || todayISO(),
         product: regProduct,
         total_payment_cash: parseInt(fd.get('total_payment_cash')) || 0,
         total_payment_card: parseInt(fd.get('total_payment_card')) || 0,
@@ -1277,7 +1277,7 @@ const InquiryTab = (() => {
           <div class="form-grid">
             <div class="form-group">
               <label>등록일자</label>
-              <input type="date" name="registered_date" value="${new Date().toISOString().slice(0, 10)}">
+              <input type="date" name="registered_date" value="${todayISO()}">
             </div>
             <div class="form-group">
               <label>등록상품 *</label>
@@ -1487,7 +1487,7 @@ const InquiryTab = (() => {
 
           const { error } = await supabase.from('tm_logs').insert({
             inquiry_id: inquiry.id,
-            tm_date: new Date().toISOString().slice(0, 10),
+            tm_date: todayISO(),
             tm_content: content,
           });
 

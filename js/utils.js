@@ -25,6 +25,16 @@ function ensureLib(...names) {
 }
 
 /**
+ * 로컬(KST) 기준 YYYY-MM-DD. toISOString()은 UTC라 오전 9시 이전엔 전날로 밀림.
+ */
+function todayISO(dt = new Date()) {
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
+
+/**
  * 전화번호 포맷: 숫자만 추출 → 010-XXXX-XXXX
  */
 function formatPhone(raw) {
@@ -153,7 +163,7 @@ async function autoScheduleSmsForRegistration(record, triggerCategory, relatedTa
     // 발송 시각: 등록일 + delay_days + 10:00 KST (UTC+9 → 01:00 UTC)
     // 기준 등록일 = record.registered_date or record.contract_date or 오늘
     const baseDateStr = record.registered_date || record.contract_date ||
-      new Date().toISOString().slice(0, 10);
+      todayISO();
 
     const rows = tpls.map(tpl => {
       const due = new Date(`${baseDateStr}T01:00:00Z`); // 등록일 10:00 KST

@@ -672,7 +672,7 @@ const PtTab = (() => {
           <div class="form-grid" style="margin-top:16px;">
             <div class="form-group">
               <label>PT등록날짜 *</label>
-              <input type="date" name="contract_date" value="${isEdit ? (editRecord.contract_date || '') : new Date().toISOString().slice(0, 10)}" required>
+              <input type="date" name="contract_date" value="${isEdit ? (editRecord.contract_date || '') : todayISO()}" required>
             </div>
             <div class="form-group">
               <label>횟수 *</label>
@@ -930,7 +930,7 @@ const PtTab = (() => {
       contract_trainer_id: contractTrainerId,
       assigned_trainer_id: assignedTrainerId,
       // PT등록날짜 — 신규/수정 모두 폼 값 우선. 빈 값이면 오늘 default (신규 때 정렬 이슈 방지).
-      contract_date: fd.get('contract_date') || new Date().toISOString().slice(0, 10),
+      contract_date: fd.get('contract_date') || todayISO(),
     };
 
     // v8: 수정 모드 UPDATE / 신규 모드 INSERT 분기
