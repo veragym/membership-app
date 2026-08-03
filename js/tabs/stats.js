@@ -721,6 +721,11 @@ const StatsTab = (() => {
       const f = from.split('-'), t = to.split('-');
       return `${parseInt(f[1])}/${parseInt(f[2])} ~ ${parseInt(t[1])}/${parseInt(t[2])}`;
     };
+    const moveMonth = (month, delta) => {
+      const [y, m] = month.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    };
     const diffStr = (cur, prev, suffix='원') => {
       const d = cur - prev;
       const pct = prev > 0 ? (d / prev * 100) : (cur > 0 ? 100 : 0);
@@ -780,6 +785,8 @@ const StatsTab = (() => {
 
     const cur = summarize(curRows);
     const prev = summarize(prevRows);
+    const curLabel = compareState.mode === 'month' ? '당월' : '선택 기간';
+    const prevLabel = compareState.mode === 'month' ? '전월' : '이전 기간';
     const byProduct = groupRows(curRows, r => r.product);
     const byManager = groupRows(curRows, r => r.sales_manager);
     const makeRows = rows => rows.length ? rows.map(r => `
@@ -817,10 +824,12 @@ const StatsTab = (() => {
         <div class="stats-staff-controls">
           <div class="stats-staff-tabs">
             <button class="stats-staff-tab ${compareState.mode === 'month' ? 'active' : ''}" data-cmp-mode="month">특정 월</button>
-            <button class="stats-staff-tab ${compareState.mode === 'range' ? 'active' : ''}" data-cmp-mode="range">직접 기간</button>
+            <button class="stats-staff-tab ${compareState.mode === 'range' ? 'active' : ''}" data-cmp-mode="range">기간 선택</button>
           </div>
           <div class="stats-staff-selects">
+            <button class="stats-staff-tab" data-cmp-month-move="-1" style="${compareState.mode === 'month' ? '' : 'display:none'}">&lt;</button>
             <input class="stats-staff-select" id="cmpMonth" type="month" value="${compareState.month}" style="${compareState.mode === 'month' ? '' : 'display:none'}">
+            <button class="stats-staff-tab" data-cmp-month-move="1" style="${compareState.mode === 'month' ? '' : 'display:none'}">&gt;</button>
             <input class="stats-staff-select" id="cmpFrom" type="date" value="${curFrom}" style="${compareState.mode === 'range' ? '' : 'display:none'}">
             <input class="stats-staff-select" id="cmpTo" type="date" value="${curTo}" style="${compareState.mode === 'range' ? '' : 'display:none'}">
           </div>
@@ -841,10 +850,10 @@ const StatsTab = (() => {
       <div class="cmp-card">
         <div class="cmp-card-header">
           <div class="cmp-card-title">회원권 매출 기간 비교</div>
-          <div class="cmp-card-sub">선택 기간 <strong>${fmtRange(curFrom, curTo)}</strong> vs 이전 기간 <strong>${fmtRange(prevFrom, prevTo)}</strong></div>
+          <div class="cmp-card-sub">${curLabel} <strong>${fmtRange(curFrom, curTo)}</strong> vs ${prevLabel} <strong>${fmtRange(prevFrom, prevTo)}</strong></div>
         </div>
         <table class="cmp-table">
-          <thead><tr><th>구분</th><th>선택 기간</th><th>이전 기간</th><th>증감</th></tr></thead>
+          <thead><tr><th>구분</th><th>${curLabel}</th><th>${prevLabel}</th><th>증감</th></tr></thead>
           <tbody>
             <tr><td>회원권 순매출 <small>(부가세 제외)</small></td><td class="cmp-num">${fmt(cur.amount)}</td><td class="cmp-num">${fmt(prev.amount)}</td><td>${diffStr(cur.amount, prev.amount)}</td></tr>
             <tr><td>총 결제액 <small>(부가세 포함)</small></td><td class="cmp-num">${fmt(cur.gross)}</td><td class="cmp-num">${fmt(prev.gross)}</td><td>${diffStr(cur.gross, prev.gross)}</td></tr>
@@ -857,7 +866,7 @@ const StatsTab = (() => {
       </div>
 
       <div class="cmp-card">
-        <div class="cmp-card-header"><div class="cmp-card-title">상품별 회원권 매출</div><div class="cmp-card-sub">선택 기간 기준</div></div>
+        <div class="cmp-card-header"><div class="cmp-card-title">상품별 회원권 매출</div><div class="cmp-card-sub">${curLabel} 기준</div></div>
         <table class="cmp-table">
           <thead><tr><th>상품</th><th>건수</th><th>순매출</th><th>평균 단가</th></tr></thead>
           <tbody>${makeRows(byProduct)}</tbody>
@@ -873,14 +882,14 @@ const StatsTab = (() => {
       </div>
 
       <div class="cmp-card">
-        <div class="cmp-card-header"><div class="cmp-card-title">선택 기간 월별 추이</div><div class="cmp-card-sub">직접 기간이 여러 월에 걸칠 때 월별 회원권 매출 흐름을 확인합니다.</div></div>
+        <div class="cmp-card-header"><div class="cmp-card-title">${curLabel} 월별 추이</div><div class="cmp-card-sub">기간 선택이 여러 월에 걸칠 때 월별 회원권 매출 흐름을 확인합니다.</div></div>
         <div class="trend-bar-list">${trendRows || '<div style="color:var(--color-text-muted);">데이터 없음</div>'}</div>
       </div>
 
       <div class="cmp-note">
         · 회원권 매출만 집계합니다. PT 등록 매출은 제외됩니다.<br>
         · 순매출은 registrations.total_payment / 1.1 기준입니다.<br>
-        · 비교 기간은 선택 기간과 같은 일수의 직전 기간입니다.
+        · 비교 기간은 ${curLabel}과 같은 일수의 직전 기간입니다.
       </div>
     `;
 
@@ -893,6 +902,12 @@ const StatsTab = (() => {
     container.querySelector('#cmpMonth')?.addEventListener('change', e => {
       compareState.month = e.target.value || compareState.month;
       loadSubTab('compare');
+    });
+    container.querySelectorAll('[data-cmp-month-move]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        compareState.month = moveMonth(compareState.month, parseInt(btn.dataset.cmpMonthMove) || 0);
+        loadSubTab('compare');
+      });
     });
     container.querySelector('#cmpFrom')?.addEventListener('change', e => {
       compareState.fromDate = e.target.value || compareState.fromDate;
