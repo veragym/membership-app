@@ -26,6 +26,16 @@ const StatsTab = (() => {
   let ptPeriod = _defaultPeriod();
 
   // 담당자별 통계 패널 상태
+  const _defaultCompareState = () => {
+    const d = new Date();
+    return {
+      mode: 'month',
+      month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      fromDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`,
+      toDate: isoDate(d),
+    };
+  };
+  let compareState = _defaultCompareState();
 
   function init() {
     const saved = localStorage.getItem(EXCLUDE_STORAGE_KEY);
@@ -56,7 +66,7 @@ const StatsTab = (() => {
     const c = document.getElementById('stats-content');
     c.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     if (tab === 'trend') await renderTrend(c);
-    else await renderCompare(c);
+    else await renderRevenueCompare(c);
   }
 
   // ───────── [매출 추이] ─────────
@@ -685,7 +695,224 @@ const StatsTab = (() => {
     ].join('\n');
   }
 
-  // ───────── [기간별 비교] — 마케팅 분석 대시보드 ─────────
+  // ───────── [기간별 비교] — 회원권 매출 전용 ─────────
+  async function renderRevenueCompare(container) {
+    container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+    const now = new Date();
+    if (!compareState.month) {
+      compareState.month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    const monthStart = month => `${month}-01`;
+    const monthEnd = month => {
+      const [y, m] = month.split('-').map(Number);
+      return isoDate(new Date(y, m, 0));
+    };
+    const addDays = (dateStr, days) => {
+      const d = new Date(`${dateStr}T00:00:00`);
+      d.setDate(d.getDate() + days);
+      return isoDate(d);
+    };
+    const daySpan = (from, to) => Math.max(0, Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000));
+    const normalizeRange = (from, to) => from > to ? { fromDate: to, toDate: from } : { fromDate: from, toDate: to };
+    const fmt = n => Math.round(n || 0).toLocaleString() + '원';
+    const fmtCount = n => (n || 0).toLocaleString() + '건';
+    const fmtRange = (from, to) => {
+      const f = from.split('-'), t = to.split('-');
+      return `${parseInt(f[1])}/${parseInt(f[2])} ~ ${parseInt(t[1])}/${parseInt(t[2])}`;
+    };
+    const diffStr = (cur, prev, suffix='원') => {
+      const d = cur - prev;
+      const pct = prev > 0 ? (d / prev * 100) : (cur > 0 ? 100 : 0);
+      const sign = d > 0 ? '+' : (d < 0 ? '' : '±');
+      const cls = d > 0 ? 'pos' : (d < 0 ? 'neg' : 'flat');
+      const body = suffix === '원' ? fmt(Math.abs(d)) : `${Math.abs(d).toLocaleString()}${suffix}`;
+      return `<span class="cmp-diff ${cls}">${sign}${body} <small>(${sign}${pct.toFixed(1)}%)</small></span>`;
+    };
+
+    let curFrom, curTo;
+    if (compareState.mode === 'range') {
+      const range = normalizeRange(compareState.fromDate || monthStart(compareState.month), compareState.toDate || monthEnd(compareState.month));
+      curFrom = range.fromDate;
+      curTo = range.toDate;
+    } else {
+      curFrom = monthStart(compareState.month);
+      curTo = monthEnd(compareState.month);
+    }
+    const prevTo = addDays(curFrom, -1);
+    const prevFrom = addDays(prevTo, -daySpan(curFrom, curTo));
+
+    if (allProducts.length === 0) await loadProducts();
+
+    const fetchFcRows = async (fromDate, toDate) => {
+      const { data, error } = await supabase.from('registrations')
+        .select('registered_date, product, total_payment, total_payment_cash, total_payment_card, sales_manager, contract_manager')
+        .gte('registered_date', fromDate).lte('registered_date', toDate);
+      if (error) throw error;
+      return (data || []).filter(r => !excludedProducts.has(r.product));
+    };
+    const [curRows, prevRows] = await Promise.all([
+      fetchFcRows(curFrom, curTo),
+      fetchFcRows(prevFrom, prevTo),
+    ]);
+
+    const net = r => Math.round((r.total_payment || 0) / 1.1);
+    const summarize = rows => {
+      const gross = rows.reduce((s, r) => s + (r.total_payment || 0), 0);
+      const cash = rows.reduce((s, r) => s + (r.total_payment_cash || 0), 0);
+      const card = rows.reduce((s, r) => s + (r.total_payment_card || 0), 0);
+      const amount = Math.round(gross / 1.1);
+      return { count: rows.length, gross, amount, cash, card, avg: rows.length ? Math.round(amount / rows.length) : 0 };
+    };
+    const groupRows = (rows, keyFn) => {
+      const map = new Map();
+      rows.forEach(r => {
+        const key = keyFn(r) || '(미지정)';
+        if (!map.has(key)) map.set(key, { count: 0, amount: 0 });
+        const item = map.get(key);
+        item.count++;
+        item.amount += net(r);
+      });
+      return Array.from(map.entries())
+        .map(([key, v]) => ({ key, ...v, avg: v.count ? Math.round(v.amount / v.count) : 0 }))
+        .sort((a, b) => b.amount - a.amount);
+    };
+
+    const cur = summarize(curRows);
+    const prev = summarize(prevRows);
+    const byProduct = groupRows(curRows, r => r.product);
+    const byManager = groupRows(curRows, r => r.sales_manager);
+    const makeRows = rows => rows.length ? rows.map(r => `
+      <tr>
+        <td>${escHtml(r.key)}</td>
+        <td class="cmp-num">${fmtCount(r.count)}</td>
+        <td class="cmp-num">${fmt(r.amount)}</td>
+        <td class="cmp-num">${fmt(r.avg)}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="4" style="color:var(--color-text-muted);">데이터 없음</td></tr>';
+
+    const months = [];
+    const start = new Date(`${curFrom}T00:00:00`);
+    const end = new Date(`${curTo}T00:00:00`);
+    for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const monthly = months.map(month => {
+      const rows = curRows.filter(r => (r.registered_date || '').slice(0, 7) === month);
+      return { month, label: month.replace('-', '.'), ...summarize(rows) };
+    });
+    const maxAmount = Math.max(...monthly.map(m => m.amount), 1);
+    const trendRows = monthly.map(m => `
+      <div class="trend-bar-row">
+        <div class="trend-bar-label">${escHtml(m.label)}</div>
+        <div class="trend-bar-track" style="width:${(m.amount / maxAmount * 100).toFixed(1)}%;">
+          <div class="trend-bar-reg" style="width:100%;" title="${fmt(m.amount)}"></div>
+        </div>
+        <div class="trend-bar-value">${fmt(m.amount)} <small>(${fmtCount(m.count)})</small></div>
+      </div>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="stats-filter-panel">
+        <div class="stats-staff-controls">
+          <div class="stats-staff-tabs">
+            <button class="stats-staff-tab ${compareState.mode === 'month' ? 'active' : ''}" data-cmp-mode="month">특정 월</button>
+            <button class="stats-staff-tab ${compareState.mode === 'range' ? 'active' : ''}" data-cmp-mode="range">직접 기간</button>
+          </div>
+          <div class="stats-staff-selects">
+            <input class="stats-staff-select" id="cmpMonth" type="month" value="${compareState.month}" style="${compareState.mode === 'month' ? '' : 'display:none'}">
+            <input class="stats-staff-select" id="cmpFrom" type="date" value="${curFrom}" style="${compareState.mode === 'range' ? '' : 'display:none'}">
+            <input class="stats-staff-select" id="cmpTo" type="date" value="${curTo}" style="${compareState.mode === 'range' ? '' : 'display:none'}">
+          </div>
+        </div>
+        <details class="stats-filter-details" style="margin-top:8px">
+          <summary>회원권 합계 제외 상품 (${excludedProducts.size}건 제외 중)</summary>
+          <div class="stats-filter-chips">
+            ${allProducts.map(p => `
+              <label class="chip-check">
+                <input type="checkbox" value="${escHtml(p)}" ${excludedProducts.has(p) ? 'checked' : ''}>
+                <span>${escHtml(p)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </details>
+      </div>
+
+      <div class="cmp-card">
+        <div class="cmp-card-header">
+          <div class="cmp-card-title">회원권 매출 기간 비교</div>
+          <div class="cmp-card-sub">선택 기간 <strong>${fmtRange(curFrom, curTo)}</strong> vs 이전 기간 <strong>${fmtRange(prevFrom, prevTo)}</strong></div>
+        </div>
+        <table class="cmp-table">
+          <thead><tr><th>구분</th><th>선택 기간</th><th>이전 기간</th><th>증감</th></tr></thead>
+          <tbody>
+            <tr><td>회원권 순매출 <small>(부가세 제외)</small></td><td class="cmp-num">${fmt(cur.amount)}</td><td class="cmp-num">${fmt(prev.amount)}</td><td>${diffStr(cur.amount, prev.amount)}</td></tr>
+            <tr><td>총 결제액 <small>(부가세 포함)</small></td><td class="cmp-num">${fmt(cur.gross)}</td><td class="cmp-num">${fmt(prev.gross)}</td><td>${diffStr(cur.gross, prev.gross)}</td></tr>
+            <tr><td>등록 건수</td><td class="cmp-num">${fmtCount(cur.count)}</td><td class="cmp-num">${fmtCount(prev.count)}</td><td>${diffStr(cur.count, prev.count, '건')}</td></tr>
+            <tr><td>평균 결제 단가</td><td class="cmp-num">${fmt(cur.avg)}</td><td class="cmp-num">${fmt(prev.avg)}</td><td>${diffStr(cur.avg, prev.avg)}</td></tr>
+            <tr><td>현금/계좌</td><td class="cmp-num">${fmt(cur.cash)}</td><td class="cmp-num">${fmt(prev.cash)}</td><td>${diffStr(cur.cash, prev.cash)}</td></tr>
+            <tr><td>카드</td><td class="cmp-num">${fmt(cur.card)}</td><td class="cmp-num">${fmt(prev.card)}</td><td>${diffStr(cur.card, prev.card)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="cmp-card">
+        <div class="cmp-card-header"><div class="cmp-card-title">상품별 회원권 매출</div><div class="cmp-card-sub">선택 기간 기준</div></div>
+        <table class="cmp-table">
+          <thead><tr><th>상품</th><th>건수</th><th>순매출</th><th>평균 단가</th></tr></thead>
+          <tbody>${makeRows(byProduct)}</tbody>
+        </table>
+      </div>
+
+      <div class="cmp-card">
+        <div class="cmp-card-header"><div class="cmp-card-title">매출담당자별 회원권 매출</div><div class="cmp-card-sub">registrations.sales_manager 기준</div></div>
+        <table class="cmp-table">
+          <thead><tr><th>매출담당</th><th>건수</th><th>순매출</th><th>평균 단가</th></tr></thead>
+          <tbody>${makeRows(byManager)}</tbody>
+        </table>
+      </div>
+
+      <div class="cmp-card">
+        <div class="cmp-card-header"><div class="cmp-card-title">선택 기간 월별 추이</div><div class="cmp-card-sub">직접 기간이 여러 월에 걸칠 때 월별 회원권 매출 흐름을 확인합니다.</div></div>
+        <div class="trend-bar-list">${trendRows || '<div style="color:var(--color-text-muted);">데이터 없음</div>'}</div>
+      </div>
+
+      <div class="cmp-note">
+        · 회원권 매출만 집계합니다. PT 등록 매출은 제외됩니다.<br>
+        · 순매출은 registrations.total_payment / 1.1 기준입니다.<br>
+        · 비교 기간은 선택 기간과 같은 일수의 직전 기간입니다.
+      </div>
+    `;
+
+    container.querySelectorAll('[data-cmp-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        compareState.mode = btn.dataset.cmpMode;
+        loadSubTab('compare');
+      });
+    });
+    container.querySelector('#cmpMonth')?.addEventListener('change', e => {
+      compareState.month = e.target.value || compareState.month;
+      loadSubTab('compare');
+    });
+    container.querySelector('#cmpFrom')?.addEventListener('change', e => {
+      compareState.fromDate = e.target.value || compareState.fromDate;
+      loadSubTab('compare');
+    });
+    container.querySelector('#cmpTo')?.addEventListener('change', e => {
+      compareState.toDate = e.target.value || compareState.toDate;
+      loadSubTab('compare');
+    });
+    container.querySelectorAll('.chip-check input').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) excludedProducts.add(cb.value);
+        else excludedProducts.delete(cb.value);
+        localStorage.setItem(EXCLUDE_STORAGE_KEY, JSON.stringify([...excludedProducts]));
+        loadSubTab('compare');
+      });
+    });
+  }
+
+  // ───────── [기간별 비교] — 마케팅 분석 대시보드 (legacy, unused) ─────────
   async function renderCompare(container) {
     container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
