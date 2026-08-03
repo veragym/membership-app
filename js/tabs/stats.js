@@ -814,26 +814,48 @@ const StatsTab = (() => {
     const prev = summarize(prevRows);
     const curLabel = compareState.mode === 'month' ? '당월' : '선택 기간';
     const prevLabel = compareState.mode === 'month' ? '전월' : '이전 기간';
-    const byPath = groupRows(curRows, r => r.consultation_type);
-    const byChannel = groupRows(curRows, r => r.inflow_channel);
-    const byPathChannel = groupRows(curRows, r => `${r.consultation_type || '(없음)'} / ${r.inflow_channel || '(없음)'}`);
-    const byProduct = groupRows(curRows.filter(r => validRegistration(r)), r => validRegistration(r)?.product);
-    const makeRows = rows => rows.length ? rows.map(r => `
+    const compareGroups = (curGrouped, prevGrouped) => {
+      const zero = { inquiries: 0, registered: 0, conversion: 0, amount: 0, avg: 0 };
+      const curMap = new Map(curGrouped.map(r => [r.key, r]));
+      const prevMap = new Map(prevGrouped.map(r => [r.key, r]));
+      const keys = new Set([...curMap.keys(), ...prevMap.keys()]);
+      return Array.from(keys).map(key => ({ key, cur: curMap.get(key) || { key, ...zero }, prev: prevMap.get(key) || { key, ...zero } }))
+        .sort((a, b) => b.cur.amount - a.cur.amount || b.cur.registered - a.cur.registered || b.prev.amount - a.prev.amount || b.prev.registered - a.prev.registered);
+    };
+    const metricCell = (curValue, prevValue, type='count') => {
+      const format = type === 'money' ? fmt : (type === 'rate' ? fmtRate : fmtCount);
+      const suffix = type === 'money' ? '원' : (type === 'rate' ? '%p' : '건');
+      const curNum = type === 'rate' ? Number((curValue || 0).toFixed(1)) : (curValue || 0);
+      const prevNum = type === 'rate' ? Number((prevValue || 0).toFixed(1)) : (prevValue || 0);
+      if (compareState.mode !== 'month') return format(curValue);
+      return `${format(curValue)}<br><small>전월 ${format(prevValue)} / ${diffStr(curNum, prevNum, suffix)}</small>`;
+    };
+    const byPath = compareGroups(groupRows(curRows, r => r.consultation_type), groupRows(prevRows, r => r.consultation_type));
+    const byChannel = compareGroups(groupRows(curRows, r => r.inflow_channel), groupRows(prevRows, r => r.inflow_channel));
+    const byPathChannel = compareGroups(
+      groupRows(curRows, r => `${r.consultation_type || '(없음)'} / ${r.inflow_channel || '(없음)'}`),
+      groupRows(prevRows, r => `${r.consultation_type || '(없음)'} / ${r.inflow_channel || '(없음)'}`)
+    );
+    const byProduct = compareGroups(
+      groupRows(curRows.filter(r => validRegistration(r)), r => validRegistration(r)?.product),
+      groupRows(prevRows.filter(r => validRegistration(r)), r => validRegistration(r)?.product)
+    );
+    const makeRows = rows => rows.length ? rows.map(({ key, cur, prev }) => `
       <tr>
-        <td>${escHtml(r.key)}</td>
-        <td class="cmp-num">${fmtCount(r.inquiries)}</td>
-        <td class="cmp-num">${fmtCount(r.registered)}</td>
-        <td class="cmp-num">${fmtRate(r.conversion)}</td>
-        <td class="cmp-num">${fmt(r.amount)}</td>
-        <td class="cmp-num">${fmt(r.avg)}</td>
+        <td>${escHtml(key)}</td>
+        <td class="cmp-num">${metricCell(cur.inquiries, prev.inquiries)}</td>
+        <td class="cmp-num">${metricCell(cur.registered, prev.registered)}</td>
+        <td class="cmp-num">${metricCell(cur.conversion, prev.conversion, 'rate')}</td>
+        <td class="cmp-num">${metricCell(cur.amount, prev.amount, 'money')}</td>
+        <td class="cmp-num">${metricCell(cur.avg, prev.avg, 'money')}</td>
       </tr>
     `).join('') : '<tr><td colspan="6" style="color:var(--color-text-muted);">데이터 없음</td></tr>';
-    const makeProductRows = rows => rows.length ? rows.map(r => `
+    const makeProductRows = rows => rows.length ? rows.map(({ key, cur, prev }) => `
       <tr>
-        <td>${escHtml(r.key)}</td>
-        <td class="cmp-num">${fmtCount(r.registered)}</td>
-        <td class="cmp-num">${fmt(r.amount)}</td>
-        <td class="cmp-num">${fmt(r.avg)}</td>
+        <td>${escHtml(key)}</td>
+        <td class="cmp-num">${metricCell(cur.registered, prev.registered)}</td>
+        <td class="cmp-num">${metricCell(cur.amount, prev.amount, 'money')}</td>
+        <td class="cmp-num">${metricCell(cur.avg, prev.avg, 'money')}</td>
       </tr>
     `).join('') : '<tr><td colspan="4" style="color:var(--color-text-muted);">데이터 없음</td></tr>';
 
@@ -955,7 +977,8 @@ const StatsTab = (() => {
         · 회원권 매출만 집계합니다. PT 등록 매출은 제외됩니다.<br>
         · 기간은 문의일(inquiries.inquiry_date) 기준입니다.<br>
         · 전환 매출은 연결된 회원권 등록(registrations.total_payment / 1.1) 기준입니다.<br>
-        · 특정 월 비교는 각 월의 1일~말일 전체 기준이며, 기간 선택은 이전 기간과 비교하지 않습니다.
+        · 특정 월 비교는 각 월의 1일~말일 전체 기준이며, 세부 항목도 전월 값과 증감을 함께 표시합니다.<br>
+        · 기간 선택은 이전 기간과 비교하지 않습니다.
       </div>
     `;
 
