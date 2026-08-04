@@ -5048,6 +5048,13 @@ html, body {
   font-weight: 500;
   margin-left: 2px;
 }
+.cmp-prev-high {
+  color: var(--color-danger-strong);
+  font-weight: 600;
+}
+.cmp-prev-low {
+  color: var(--color-text-muted);
+}
 .cmp-note {
   margin-top: 12px;
   padding: 10px 12px;

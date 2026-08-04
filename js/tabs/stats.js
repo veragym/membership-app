@@ -918,22 +918,17 @@ const StatsTab = (() => {
     };
     const metricCell = (curValue, prevValue, type='count') => {
       const format = type === 'money' ? fmt : (type === 'rate' ? fmtRate : fmtCount);
-      const suffix = type === 'money' ? '원' : (type === 'rate' ? '%p' : '건');
-      const curNum = type === 'rate' ? Number((curValue || 0).toFixed(1)) : (curValue || 0);
-      const prevNum = type === 'rate' ? Number((prevValue || 0).toFixed(1)) : (prevValue || 0);
       if (compareState.mode !== 'month') return format(curValue);
-      return `${format(curValue)}<br><small>전월 ${format(prevValue)} / ${diffStr(curNum, prevNum, suffix)}</small>`;
+      return `${format(curValue)}<br><small class="${prevClass(curValue, prevValue)}">전월 ${format(prevValue)}</small>`;
     };
     const categoryRevenueCell = (amount, count, prevAmount, prevCount) => {
       if (compareState.mode !== 'month') return `${fmt(amount)} <small>(${fmtCount(count)})</small>`;
-      return `${fmt(amount)} <small>(${fmtCount(count)})</small><br><small>전월 ${fmt(prevAmount)} (${fmtCount(prevCount)}) / ${diffStr(amount || 0, prevAmount || 0)}</small>`;
+      return `${fmt(amount)} <small>(${fmtCount(count)})</small><br><small class="${prevClass(amount, prevAmount)}">전월 ${fmt(prevAmount)} (${fmtCount(prevCount)})</small>`;
     };
+    const prevClass = (curValue, prevValue) => (prevValue || 0) > (curValue || 0) ? 'cmp-prev-high' : 'cmp-prev-low';
+    const prevCell = (curValue, prevValue, html) => `<td class="cmp-num ${prevClass(curValue, prevValue)}">${html}</td>`;
     const byPath = compareGroups(groupRows(curRows, r => r.consultation_type), groupRows(prevRows, r => r.consultation_type));
     const byChannel = compareGroups(groupRows(curRows, r => r.inflow_channel), groupRows(prevRows, r => r.inflow_channel));
-    const byPathChannel = compareGroups(
-      groupRows(curRows, r => `${r.consultation_type || '(없음)'} / ${r.inflow_channel || '(없음)'}`),
-      groupRows(prevRows, r => `${r.consultation_type || '(없음)'} / ${r.inflow_channel || '(없음)'}`)
-    );
     const byProduct = compareGroups(
       groupRows(curRows.filter(r => validRegistration(r)), r => validRegistration(r)?.product),
       groupRows(prevRows.filter(r => validRegistration(r)), r => validRegistration(r)?.product)
@@ -1017,15 +1012,15 @@ const StatsTab = (() => {
         </div>
         <table class="cmp-table">
           ${compareState.mode === 'month' ? `
-            <thead><tr><th>구분</th><th>${curLabel}</th><th>${prevLabel}</th><th>증감</th></tr></thead>
+            <thead><tr><th>구분</th><th>${curLabel}</th><th>${prevLabel}</th></tr></thead>
             <tbody>
-              <tr><td>문의량</td><td class="cmp-num">${fmtCount(cur.inquiries)}</td><td class="cmp-num">${fmtCount(prev.inquiries)}</td><td>${diffStr(cur.inquiries, prev.inquiries, '건')}</td></tr>
-              <tr><td>회원권 등록량</td><td class="cmp-num">${fmtCount(cur.registered)}</td><td class="cmp-num">${fmtCount(prev.registered)}</td><td>${diffStr(cur.registered, prev.registered, '건')}</td></tr>
-              <tr><td>문의 대비 등록률</td><td class="cmp-num">${fmtRate(cur.conversion)}</td><td class="cmp-num">${fmtRate(prev.conversion)}</td><td>${diffStr(Number(cur.conversion.toFixed(1)), Number(prev.conversion.toFixed(1)), '%p')}</td></tr>
-              <tr><td>회원권 전환 매출 <small>(부가세 제외)</small></td><td class="cmp-num">${fmt(cur.amount)}</td><td class="cmp-num">${fmt(prev.amount)}</td><td>${diffStr(cur.amount, prev.amount)}</td></tr>
-              <tr><td>신규 전환 매출</td><td class="cmp-num">${fmt(cur.newAmount)} <small>(${fmtCount(cur.newRegistered)})</small></td><td class="cmp-num">${fmt(prev.newAmount)} <small>(${fmtCount(prev.newRegistered)})</small></td><td>${diffStr(cur.newAmount, prev.newAmount)}</td></tr>
-              <tr><td>재등록 전환 매출</td><td class="cmp-num">${fmt(cur.renewAmount)} <small>(${fmtCount(cur.renewRegistered)})</small></td><td class="cmp-num">${fmt(prev.renewAmount)} <small>(${fmtCount(prev.renewRegistered)})</small></td><td>${diffStr(cur.renewAmount, prev.renewAmount)}</td></tr>
-              <tr><td>등록 1건당 평균 매출</td><td class="cmp-num">${fmt(cur.avg)}</td><td class="cmp-num">${fmt(prev.avg)}</td><td>${diffStr(cur.avg, prev.avg)}</td></tr>
+              <tr><td>문의량</td><td class="cmp-num">${fmtCount(cur.inquiries)}</td>${prevCell(cur.inquiries, prev.inquiries, fmtCount(prev.inquiries))}</tr>
+              <tr><td>회원권 등록량</td><td class="cmp-num">${fmtCount(cur.registered)}</td>${prevCell(cur.registered, prev.registered, fmtCount(prev.registered))}</tr>
+              <tr><td>문의 대비 등록률</td><td class="cmp-num">${fmtRate(cur.conversion)}</td>${prevCell(cur.conversion, prev.conversion, fmtRate(prev.conversion))}</tr>
+              <tr><td>회원권 전환 매출 <small>(부가세 제외)</small></td><td class="cmp-num">${fmt(cur.amount)}</td>${prevCell(cur.amount, prev.amount, fmt(prev.amount))}</tr>
+              <tr><td>신규 전환 매출</td><td class="cmp-num">${fmt(cur.newAmount)} <small>(${fmtCount(cur.newRegistered)})</small></td>${prevCell(cur.newAmount, prev.newAmount, `${fmt(prev.newAmount)} <small>(${fmtCount(prev.newRegistered)})</small>`)}</tr>
+              <tr><td>재등록 전환 매출</td><td class="cmp-num">${fmt(cur.renewAmount)} <small>(${fmtCount(cur.renewRegistered)})</small></td>${prevCell(cur.renewAmount, prev.renewAmount, `${fmt(prev.renewAmount)} <small>(${fmtCount(prev.renewRegistered)})</small>`)}</tr>
+              <tr><td>등록 1건당 평균 매출</td><td class="cmp-num">${fmt(cur.avg)}</td>${prevCell(cur.avg, prev.avg, fmt(prev.avg))}</tr>
             </tbody>
           ` : `
             <thead><tr><th>구분</th><th>${curLabel}</th></tr></thead>
@@ -1059,14 +1054,6 @@ const StatsTab = (() => {
       </div>
 
       <div class="cmp-card">
-        <div class="cmp-card-header"><div class="cmp-card-title">문의 방식 + 유입 경로 조합</div><div class="cmp-card-sub">어떤 방식으로, 어떤 경로에서 들어온 문의가 매출로 이어졌는지 확인합니다.</div></div>
-        <table class="cmp-table">
-          <thead><tr><th>방식 / 경로</th><th>문의량</th><th>등록량</th><th>등록률</th><th>전환 매출</th><th>신규 매출</th><th>재등록 매출</th><th>평균 매출</th></tr></thead>
-          <tbody>${makeRows(byPathChannel)}</tbody>
-        </table>
-      </div>
-
-      <div class="cmp-card">
         <div class="cmp-card-header"><div class="cmp-card-title">상품별 전환 매출</div><div class="cmp-card-sub">등록 완료된 회원권 상품 기준</div></div>
         <table class="cmp-table">
           <thead><tr><th>상품</th><th>등록량</th><th>전환 매출</th><th>신규 매출</th><th>재등록 매출</th><th>평균 매출</th></tr></thead>
@@ -1084,7 +1071,7 @@ const StatsTab = (() => {
         · 기간은 문의일(inquiries.inquiry_date) 기준입니다.<br>
         · 전환 매출은 연결된 회원권 등록(registrations.total_payment / 1.1) 기준입니다.<br>
         · 신규/재등록은 문의 구분(inquiries.category) 기준입니다.<br>
-        · 특정 월 비교는 각 월의 1일~말일 전체 기준이며, 세부 항목도 전월 값과 증감을 함께 표시합니다.<br>
+        · 특정 월 비교는 각 월의 1일~말일 전체 기준이며, 전월 수치가 당월보다 높으면 빨강, 낮거나 같으면 회색으로 표시합니다.<br>
         · 기간 선택은 이전 기간과 비교하지 않습니다.
       </div>
     `;
