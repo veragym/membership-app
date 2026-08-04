@@ -114,27 +114,43 @@ const StatsTab = (() => {
       </div>
 
       <div class="stats-trend-grid">
-        ${renderCard('당월 매출', current, fcTarget, ptTarget, {
-          current: true, withActions: true,
-          todayRev, weekRev, weekInfo
-        })}
-        <div class="stats-quad-grid">
-          ${renderCard(`전월 대비 (${lastMonth.m}월)`, lastM, null, null, { compareBase: current })}
-          <div class="stats-card-v2 stats-staff-card">
-            <div class="stats-staff-header">
-              <h4>회원권 <small>(매출담당자별)</small></h4>
+        <div class="stats-current-column">
+          ${renderCard('당월 매출', current, fcTarget, ptTarget, {
+            current: true, withActions: true,
+            todayRev, weekRev, weekInfo
+          })}
+        </div>
+        <div class="stats-trend-main">
+          <section class="stats-trend-section">
+            <div class="stats-trend-section-head">
+              <h3>비교 매출</h3>
             </div>
-            ${renderPeriodControls('fc', fcPeriod)}
-            <div id="staffBodyFc" class="stats-staff-body"></div>
-          </div>
-          ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
-          <div class="stats-card-v2 stats-staff-card">
-            <div class="stats-staff-header">
-              <h4>PT <small>(계약T별)</small></h4>
+            <div class="stats-compare-row">
+              ${renderCard(`전월 대비 (${lastMonth.m}월)`, lastM, null, null, { compareBase: current })}
+              ${renderCard(`전년 대비 (${lastYear.y}년 ${lastYear.m}월)`, lastY, null, null, { compareBase: current })}
             </div>
-            ${renderPeriodControls('pt', ptPeriod)}
-            <div id="staffBodyPt" class="stats-staff-body"></div>
-          </div>
+          </section>
+          <section class="stats-trend-section">
+            <div class="stats-trend-section-head">
+              <h3>담당자별 매출</h3>
+            </div>
+            <div class="stats-staff-grid">
+              <div class="stats-card-v2 stats-staff-card">
+                <div class="stats-staff-header">
+                  <h4>회원권 <small>(매출담당자별)</small></h4>
+                </div>
+                ${renderPeriodControls('fc', fcPeriod)}
+                <div id="staffBodyFc" class="stats-staff-body"></div>
+              </div>
+              <div class="stats-card-v2 stats-staff-card">
+                <div class="stats-staff-header">
+                  <h4>PT <small>(계약T별)</small></h4>
+                </div>
+                ${renderPeriodControls('pt', ptPeriod)}
+                <div id="staffBodyPt" class="stats-staff-body"></div>
+              </div>
+            </div>
+          </section>
         </div>
         <div id="weeklyBreakdown" class="stats-weekly-card stats-card-v2">
           <div class="loading-center"><div class="spinner"></div></div>
