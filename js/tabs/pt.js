@@ -346,6 +346,11 @@ const PtTab = (() => {
           </div>
 
           <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group full">
+              <label for="upg-contract-date">업그레이드 날짜 *</label>
+              <input type="date" name="contract_date" id="upg-contract-date" value="${todayISO()}" required>
+              <div class="form-hint">추가 계약과 결제 내역에 반영할 날짜를 선택하세요.</div>
+            </div>
             <div class="form-group">
               <label>추가 회수 *</label>
               <input type="number" name="add_count" id="upg-add-count" min="1" placeholder="예: 12" required>
@@ -397,7 +402,7 @@ const PtTab = (() => {
           </div>
 
           <div class="form-hint" style="font-size:12px; color:var(--color-text-secondary); margin:8px 0 12px; padding:10px 12px; background:var(--color-bg-0); border-radius:6px;">
-            · 원본 PT 계약은 그대로 유지되며, <strong>오늘 날짜로 신규 PT 행이 추가</strong>됩니다.<br>
+            · 원본 PT 계약은 그대로 유지되며, <strong>선택한 업그레이드 날짜로 신규 PT 행이 추가</strong>됩니다.<br>
             · 매출 = 회원 실 결제액 (1:1 일치). 차액 단가가 자동 계산되며, <strong>합산 가중평균이 회원 안내가와 일치</strong>합니다.<br>
             · PT관리앱(잔여횟수/매출/가중평균)도 자동으로 동기화됩니다.
           </div>
@@ -466,6 +471,9 @@ const PtTab = (() => {
 
   async function submitPtUpgrade(form, rec) {
     const fd = new FormData(form);
+    const contractDate = fd.get('contract_date');
+    const dateInput = form.querySelector('#upg-contract-date');
+    if (!contractDate || !dateInput?.checkValidity()) { Toast.warning('업그레이드 날짜를 선택해주세요.'); return; }
     const addCount = parseInt(fd.get('add_count'));
     if (!addCount || addCount < 1) { Toast.warning('추가 회수를 입력해주세요.'); return; }
 
@@ -498,10 +506,13 @@ const PtTab = (() => {
       p_assigned_trainer_id: assignedTrainerId,
       p_contract_trainer_id: contractTrainerId,
       p_note: note,
+      p_contract_date: contractDate,
     });
 
     if (error) {
-      Toast.error('업그레이드 실패: ' + error.message);
+      Toast.error(error.code === 'PGRST202'
+        ? '날짜 지정 저장을 아직 사용할 수 없습니다. 관리자에게 문의해 주세요.'
+        : '업그레이드 실패: ' + error.message);
       submitBtn.disabled = false;
       submitBtn.textContent = '업그레이드 실행';
       return;
